@@ -2,6 +2,7 @@ package com.github.starter.dbmonitor.service;
 
 import com.github.starter.dbmonitor.config.DbMonitorProperties;
 import com.github.starter.dbmonitor.entity.DbMonitorStatistics;
+import com.github.starter.dbmonitor.entity.MonitorConfig;
 import com.github.starter.dbmonitor.repository.DbMonitorStatisticsRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,6 +38,9 @@ public class DbMonitorService {
     @Autowired
     private DiskSpaceEstimationService diskSpaceEstimationService;
     
+    @Autowired
+    private MonitorConfigService monitorConfigService;
+    
     private final Map<String, JdbcTemplate> jdbcTemplateCache = new ConcurrentHashMap<>();
     
     /**
@@ -47,27 +51,24 @@ public class DbMonitorService {
         log.info("开始执行数据库监控任务");
         
         try {
-            // 获取数据源
-            DataSource dataSource = dataSourceService.getDataSource(dbMonitorProperties.getDataSourceName());
-            JdbcTemplate jdbcTemplate = getJdbcTemplate(dataSource);
+            // 获取所有启用的监控配置
+            List<MonitorConfig> enabledConfigs = monitorConfigService.getEnabledConfigs();
             
-            // 获取需要监控的表名列表
-            List<String> tableNames = getMonitoredTableNames(jdbcTemplate);
+            if (enabledConfigs.isEmpty()) {
+                log.info("没有启用的监控配置，跳过监控任务");
+                return;
+            }
             
-            // 计算时间范围
-            LocalDateTime endTime = LocalDateTime.now();
-            LocalDateTime startTime = calculateStartTime(endTime);
-            
-            // 遍历每个表进行监控
-            for (String tableName : tableNames) {
+            // 遍历每个监控配置进行监控
+            for (MonitorConfig config : enabledConfigs) {
                 try {
-                    monitorTable(jdbcTemplate, tableName, startTime, endTime);
+                    monitorTableWithConfig(config);
                 } catch (Exception e) {
-                    log.error("监控表 {} 时发生错误: {}", tableName, e.getMessage(), e);
+                    log.error("监控配置 {} 执行失败: {}", config.getConfigName(), e.getMessage(), e);
                 }
             }
             
-            log.info("数据库监控任务执行完成，共监控了 {} 个表", tableNames.size());
+            log.info("数据库监控任务执行完成，共监控了 {} 个配置", enabledConfigs.size());
             
         } catch (Exception e) {
             log.error("执行数据库监控任务时发生错误: {}", e.getMessage(), e);
@@ -76,7 +77,57 @@ public class DbMonitorService {
     }
     
     /**
-     * 监控单个表
+     * 使用监控配置监控单个表
+     */
+    private void monitorTableWithConfig(MonitorConfig config) {
+        try {
+            // 获取数据源
+            DataSource dataSource = dataSourceService.getDataSource(config.getDataSourceName());
+            JdbcTemplate jdbcTemplate = getJdbcTemplate(dataSource);
+            
+            // 计算时间范围
+            LocalDateTime endTime = LocalDateTime.now();
+            LocalDateTime startTime = calculateStartTime(endTime, config);
+            
+            // 使用配置的时间字段查询增量数据
+            Long incrementCount = queryTableIncrementWithConfig(jdbcTemplate, config, startTime, endTime);
+            
+            // 估算增量数据的磁盘空间使用量
+            DiskSpaceEstimationService.DiskSpaceEstimation diskSpaceEstimation = 
+                diskSpaceEstimationService.estimateIncrementalDiskSpace(jdbcTemplate, config.getTableName(), incrementCount);
+            
+            // 创建统计记录
+            DbMonitorStatistics statistics = new DbMonitorStatistics(
+                config.getDataSourceName(),
+                config.getTableName(),
+                startTime,
+                endTime,
+                incrementCount,
+                diskSpaceEstimation.getTotalEstimatedSize(),
+                diskSpaceEstimation.getAvgRowSize(),
+                config.getIntervalType(),
+                config.getIntervalValue()
+            );
+            
+            // 设置创建时间
+            statistics.setCreatedTime(LocalDateTime.now());
+            
+            // 保存统计记录
+            statisticsRepository.insert(statistics);
+            
+            log.info("监控配置 {} - 表 {} 在时间范围 {} 到 {} 的增量数据为: {} 行，估计磁盘空间: {} 字节 ({})", 
+                    config.getConfigName(), config.getTableName(), startTime, endTime, incrementCount, 
+                    diskSpaceEstimation.getTotalEstimatedSize(), 
+                    formatBytes(diskSpaceEstimation.getTotalEstimatedSize()));
+            
+        } catch (Exception e) {
+            log.error("监控配置 {} 执行失败: {}", config.getConfigName(), e.getMessage(), e);
+            throw e;
+        }
+    }
+    
+    /**
+     * 监控单个表（保留原有方法以兼容）
      */
     private void monitorTable(JdbcTemplate jdbcTemplate, String tableName, 
                              LocalDateTime startTime, LocalDateTime endTime) {
@@ -119,7 +170,29 @@ public class DbMonitorService {
     }
     
     /**
-     * 查询表的增量数据
+     * 使用监控配置查询表的增量数据
+     */
+    private Long queryTableIncrementWithConfig(JdbcTemplate jdbcTemplate, MonitorConfig config, 
+                                              LocalDateTime startTime, LocalDateTime endTime) {
+        try {
+            String sql = String.format(
+                "SELECT COUNT(*) FROM %s WHERE %s >= ? AND %s < ?",
+                config.getTableName(), config.getTimeColumnName(), config.getTimeColumnName()
+            );
+            
+            Long count = jdbcTemplate.queryForObject(sql, Long.class, startTime, endTime);
+            log.debug("表 {} 使用时间字段 {} 查询到增量数据: {}", 
+                    config.getTableName(), config.getTimeColumnName(), count);
+            return count != null ? count : 0L;
+            
+        } catch (Exception e) {
+            log.error("查询表 {} 增量数据时发生错误: {}", config.getTableName(), e.getMessage(), e);
+            return 0L;
+        }
+    }
+    
+    /**
+     * 查询表的增量数据（保留原有方法以兼容）
      */
     private Long queryTableIncrement(JdbcTemplate jdbcTemplate, String tableName, 
                                    LocalDateTime startTime, LocalDateTime endTime) {
@@ -164,7 +237,26 @@ public class DbMonitorService {
     }
     
     /**
-     * 计算开始时间
+     * 计算开始时间（基于监控配置）
+     */
+    private LocalDateTime calculateStartTime(LocalDateTime endTime, MonitorConfig config) {
+        String type = config.getIntervalType();
+        int value = config.getIntervalValue();
+        
+        switch (type.toUpperCase()) {
+            case "MINUTES":
+                return endTime.minusMinutes(value);
+            case "HOURS":
+                return endTime.minusHours(value);
+            case "DAYS":
+                return endTime.minusDays(value);
+            default:
+                return endTime.minusMinutes(value);
+        }
+    }
+    
+    /**
+     * 计算开始时间（基于配置文件，保留兼容性）
      */
     private LocalDateTime calculateStartTime(LocalDateTime endTime) {
         String type = dbMonitorProperties.getTimeInterval().getType();

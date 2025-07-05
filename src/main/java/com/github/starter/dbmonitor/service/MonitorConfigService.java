@@ -1,0 +1,304 @@
+package com.github.starter.dbmonitor.service;
+
+import com.github.starter.dbmonitor.entity.MonitorConfig;
+import com.github.starter.dbmonitor.repository.MonitorConfigRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import javax.annotation.PostConstruct;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * 监控配置服务
+ */
+@Service
+@Slf4j
+public class MonitorConfigService {
+    
+    @Autowired
+    private MonitorConfigRepository monitorConfigRepository;
+    
+    @Autowired
+    private DataSourceService dataSourceService;
+    
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    
+    /**
+     * 初始化监控配置表
+     */
+    @PostConstruct
+    public void init() {
+        try {
+            monitorConfigRepository.createTableIfNotExists();
+            log.info("监控配置服务初始化完成");
+        } catch (Exception e) {
+            log.error("监控配置服务初始化失败: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 创建监控配置
+     */
+    @Transactional
+    public MonitorConfig createConfig(MonitorConfig config) {
+        validateConfig(config);
+        
+        // 检查配置名称是否已存在
+        if (monitorConfigRepository.findByConfigName(config.getConfigName()).isPresent()) {
+            throw new IllegalArgumentException("配置名称已存在: " + config.getConfigName());
+        }
+        
+        // 检查数据源和表名的组合是否已存在
+        Optional<MonitorConfig> existingConfig = monitorConfigRepository
+                .findByDataSourceNameAndTableName(config.getDataSourceName(), config.getTableName());
+        if (existingConfig.isPresent()) {
+            throw new IllegalArgumentException("数据源 " + config.getDataSourceName() + 
+                    " 中的表 " + config.getTableName() + " 已存在监控配置");
+        }
+        
+        // 验证表和时间字段是否存在
+        validateTableAndTimeColumn(config);
+        
+        // 设置默认值
+        config.setCreatedTime(LocalDateTime.now());
+        config.setUpdatedTime(LocalDateTime.now());
+        if (config.getEnabled() == null) {
+            config.setEnabled(true);
+        }
+        if (!StringUtils.hasText(config.getIntervalType())) {
+            config.setIntervalType("MINUTES");
+        }
+        if (config.getIntervalValue() == null) {
+            config.setIntervalValue(10);
+        }
+        
+        return monitorConfigRepository.insert(config);
+    }
+    
+    /**
+     * 更新监控配置
+     */
+    @Transactional
+    public boolean updateConfig(MonitorConfig config) {
+        validateConfig(config);
+        
+        // 检查配置是否存在
+        Optional<MonitorConfig> existingConfig = monitorConfigRepository.findById(config.getId());
+        if (!existingConfig.isPresent()) {
+            throw new IllegalArgumentException("监控配置不存在: " + config.getId());
+        }
+        
+        // 检查配置名称是否与其他配置冲突
+        Optional<MonitorConfig> configWithSameName = monitorConfigRepository.findByConfigName(config.getConfigName());
+        if (configWithSameName.isPresent() && !configWithSameName.get().getId().equals(config.getId())) {
+            throw new IllegalArgumentException("配置名称已存在: " + config.getConfigName());
+        }
+        
+        // 验证表和时间字段是否存在
+        validateTableAndTimeColumn(config);
+        
+        // 更新时间
+        config.setUpdatedTime(LocalDateTime.now());
+        
+        return monitorConfigRepository.update(config);
+    }
+    
+    /**
+     * 根据ID获取监控配置
+     */
+    public Optional<MonitorConfig> getConfigById(Long id) {
+        return monitorConfigRepository.findById(id);
+    }
+    
+    /**
+     * 根据配置名称获取监控配置
+     */
+    public Optional<MonitorConfig> getConfigByName(String configName) {
+        return monitorConfigRepository.findByConfigName(configName);
+    }
+    
+    /**
+     * 获取所有监控配置
+     */
+    public List<MonitorConfig> getAllConfigs() {
+        return monitorConfigRepository.findAll();
+    }
+    
+    /**
+     * 获取所有启用的监控配置
+     */
+    public List<MonitorConfig> getEnabledConfigs() {
+        return monitorConfigRepository.findAllEnabled();
+    }
+    
+    /**
+     * 根据数据源获取监控配置
+     */
+    public List<MonitorConfig> getConfigsByDataSource(String dataSourceName) {
+        return monitorConfigRepository.findByDataSourceName(dataSourceName);
+    }
+    
+    /**
+     * 删除监控配置
+     */
+    @Transactional
+    public boolean deleteConfig(Long id) {
+        Optional<MonitorConfig> config = monitorConfigRepository.findById(id);
+        if (!config.isPresent()) {
+            throw new IllegalArgumentException("监控配置不存在: " + id);
+        }
+        
+        return monitorConfigRepository.deleteById(id);
+    }
+    
+    /**
+     * 启用或禁用监控配置
+     */
+    @Transactional
+    public boolean updateConfigEnabled(Long id, Boolean enabled, String updatedBy) {
+        Optional<MonitorConfig> config = monitorConfigRepository.findById(id);
+        if (!config.isPresent()) {
+            throw new IllegalArgumentException("监控配置不存在: " + id);
+        }
+        
+        return monitorConfigRepository.updateEnabled(id, enabled, updatedBy);
+    }
+    
+    /**
+     * 批量启用或禁用监控配置
+     */
+    @Transactional
+    public int batchUpdateConfigEnabled(List<Long> ids, Boolean enabled, String updatedBy) {
+        return monitorConfigRepository.batchUpdateEnabled(ids, enabled, updatedBy);
+    }
+    
+    /**
+     * 测试监控配置是否有效
+     */
+    public boolean testConfig(MonitorConfig config) {
+        try {
+            validateTableAndTimeColumn(config);
+            return true;
+        } catch (Exception e) {
+            log.warn("测试监控配置失败: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 获取表的所有列信息
+     */
+    public List<String> getTableColumns(String dataSourceName, String tableName) {
+        try {
+            String sql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION";
+            
+            return jdbcTemplate.queryForList(sql, String.class, tableName);
+        } catch (Exception e) {
+            log.error("获取表 {} 的列信息失败: {}", tableName, e.getMessage());
+            throw new RuntimeException("获取表列信息失败", e);
+        }
+    }
+    
+    /**
+     * 自动检测表的时间字段
+     */
+    public List<String> detectTimeColumns(String dataSourceName, String tableName) {
+        try {
+            String sql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? " +
+                    "AND (DATA_TYPE IN ('datetime', 'timestamp', 'date') " +
+                    "OR COLUMN_NAME LIKE '%time%' OR COLUMN_NAME LIKE '%date%' " +
+                    "OR COLUMN_NAME LIKE '%created%' OR COLUMN_NAME LIKE '%updated%') " +
+                    "ORDER BY ORDINAL_POSITION";
+            
+            return jdbcTemplate.queryForList(sql, String.class, tableName);
+        } catch (Exception e) {
+            log.error("自动检测表 {} 的时间字段失败: {}", tableName, e.getMessage());
+            throw new RuntimeException("自动检测时间字段失败", e);
+        }
+    }
+    
+    /**
+     * 根据数据源和表名获取监控配置
+     */
+    public Optional<MonitorConfig> getConfigByDataSourceAndTable(String dataSourceName, String tableName) {
+        return monitorConfigRepository.findByDataSourceNameAndTableName(dataSourceName, tableName);
+    }
+    
+    /**
+     * 验证监控配置
+     */
+    private void validateConfig(MonitorConfig config) {
+        if (!StringUtils.hasText(config.getConfigName())) {
+            throw new IllegalArgumentException("配置名称不能为空");
+        }
+        
+        if (!StringUtils.hasText(config.getDataSourceName())) {
+            throw new IllegalArgumentException("数据源名称不能为空");
+        }
+        
+        if (!StringUtils.hasText(config.getTableName())) {
+            throw new IllegalArgumentException("表名不能为空");
+        }
+        
+        if (!StringUtils.hasText(config.getTimeColumnName())) {
+            throw new IllegalArgumentException("时间字段名不能为空");
+        }
+        
+        if (!StringUtils.hasText(config.getTimeColumnType())) {
+            throw new IllegalArgumentException("时间字段类型不能为空");
+        }
+        
+        if (config.getIntervalValue() != null && config.getIntervalValue() <= 0) {
+            throw new IllegalArgumentException("监控间隔值必须大于0");
+        }
+        
+        // 验证间隔类型
+        if (StringUtils.hasText(config.getIntervalType())) {
+            String intervalType = config.getIntervalType().toUpperCase();
+            if (!intervalType.equals("MINUTES") && !intervalType.equals("HOURS") && !intervalType.equals("DAYS")) {
+                throw new IllegalArgumentException("监控间隔类型必须是 MINUTES、HOURS 或 DAYS");
+            }
+        }
+    }
+    
+    /**
+     * 验证表和时间字段是否存在
+     */
+    private void validateTableAndTimeColumn(MonitorConfig config) {
+        try {
+            // 检查表是否存在
+            String checkTableSql = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES " +
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?";
+            
+            Integer tableCount = jdbcTemplate.queryForObject(checkTableSql, Integer.class, config.getTableName());
+            if (tableCount == null || tableCount == 0) {
+                throw new IllegalArgumentException("表不存在: " + config.getTableName());
+            }
+            
+            // 检查时间字段是否存在
+            String checkColumnSql = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS " +
+                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?";
+            
+            Integer columnCount = jdbcTemplate.queryForObject(checkColumnSql, Integer.class, 
+                    config.getTableName(), config.getTimeColumnName());
+            if (columnCount == null || columnCount == 0) {
+                throw new IllegalArgumentException("时间字段不存在: " + config.getTimeColumnName());
+            }
+            
+            log.debug("验证表 {} 和时间字段 {} 成功", config.getTableName(), config.getTimeColumnName());
+            
+        } catch (Exception e) {
+            log.error("验证表和时间字段失败: {}", e.getMessage());
+            throw new RuntimeException("验证表和时间字段失败: " + e.getMessage(), e);
+        }
+    }
+}
