@@ -5,10 +5,11 @@
 ## 功能特性
 
 - ✅ 定时查询数据库中指定表在近一段时间内的数据增量
+- ✅ **增量数据磁盘空间占用预估**：自动计算增量数据的磁盘空间使用量
 - ✅ 支持指定需要查询统计的表，表名支持通配符匹配
 - ✅ 查询频率可配置，支持使用XXL-Job来调度
 - ✅ 查询的时间区间可配置（近10分钟、近半小时、近1小时等）
-- ✅ 统计结果存储到监控数据表中
+- ✅ 统计结果存储到监控数据表中，包含磁盘空间估算信息
 - ✅ 监控数据暴露接口，用来对接Prometheus、Grafana等监控工具
 - ✅ 支持Spring Boot 2.3.12
 - ✅ 支持指定数据源
@@ -62,6 +63,31 @@ db:
 
 启动你的Spring Boot应用，数据库监控功能将自动开始工作。
 
+## 磁盘空间监控功能
+
+### 磁盘空间估算方法
+
+系统采用多种方法来估算表的磁盘空间使用量：
+
+1. **优先使用数据库统计信息**：
+   - 从 `INFORMATION_SCHEMA.TABLES` 获取平均行长度
+   - 从 `SHOW TABLE STATUS` 获取表的统计信息
+
+2. **基于表结构估算**：
+   - 分析表的字段类型和长度
+   - 根据不同数据类型计算预估大小
+
+3. **缓存机制**：
+   - 表结构信息会被缓存，避免重复查询
+   - 提高性能，减少数据库负载
+
+### 磁盘空间监控指标
+
+- **每表增量数据磁盘空间**：计算每个表在监控时间段内新增数据的磁盘空间
+- **平均行大小**：每个表的平均行大小（字节）
+- **总磁盘空间使用**：所有监控表的总磁盘空间使用量
+- **磁盘空间排行**：按磁盘使用量排序的表信息
+
 ## 配置说明
 
 ### 基本配置
@@ -114,7 +140,7 @@ db:
 GET /api/db-monitor/statistics
 ```
 
-获取最新的监控统计数据。
+获取最新的监控统计数据，包含磁盘空间信息。
 
 ### 获取指定表的监控统计数据
 
@@ -124,13 +150,37 @@ GET /api/db-monitor/statistics/{tableName}
 
 获取指定表的监控统计数据。
 
+### 获取磁盘空间汇总信息
+
+```http
+GET /api/db-monitor/disk-space/summary
+```
+
+获取磁盘空间使用汇总信息，包括：
+
+**响应示例：**
+```json
+{
+  "total_increment_count": 12500,
+  "total_estimated_disk_size_bytes": 2048000,
+  "total_estimated_disk_size_formatted": "2.00 MB",
+  "monitored_tables_count": 5,
+  "timestamp": "2024-01-15T10:30:00"
+}
+```
+
 ### 获取Prometheus格式的监控指标
 
 ```http
 GET /api/db-monitor/metrics
 ```
 
-获取Prometheus格式的监控指标，用于对接Prometheus。
+获取Prometheus格式的监控指标，包括磁盘空间相关指标。
+
+**新增的磁盘空间指标：**
+- `db_monitor_estimated_disk_size_bytes` - 表增量数据磁盘空间估算
+- `db_monitor_avg_row_size_bytes` - 表平均行大小
+- `db_monitor_total_estimated_disk_size_bytes` - 总磁盘空间估算
 
 ### 获取JSON格式的监控指标
 
@@ -138,7 +188,49 @@ GET /api/db-monitor/metrics
 GET /api/db-monitor/metrics/json
 ```
 
-获取JSON格式的监控指标。
+获取JSON格式的监控指标，包含详细的磁盘空间信息。
+
+**响应示例：**
+```json
+{
+  "timestamp": "2024-01-15T10:30:00",
+  "data_source": "primary",
+  "monitored_tables_count": 3,
+  "datasource_health": "healthy",
+  "total_increment_count": 1500,
+  "total_estimated_disk_size_bytes": 384000,
+  "total_estimated_disk_size_formatted": "375.00 KB",
+  "disk_space_summary": {
+    "total_estimated_size_bytes": 384000,
+    "total_estimated_size_formatted": "375.00 KB",
+    "average_row_size_bytes": 256,
+    "largest_table_increment": {
+      "table_name": "user_activity",
+      "increment_count": 800
+    },
+    "largest_disk_usage": {
+      "table_name": "order_info",
+      "estimated_disk_size_bytes": 204800,
+      "estimated_disk_size_formatted": "200.00 KB"
+    }
+  },
+  "table_metrics": [
+    {
+      "table_name": "user_activity",
+      "increment_count": 800,
+      "estimated_disk_size_bytes": 204800,
+      "estimated_disk_size_formatted": "200.00 KB",
+      "avg_row_size_bytes": 256,
+      "avg_row_size_formatted": "256 B",
+      "last_execution_time": "2024-01-15T10:25:00",
+      "start_time": "2024-01-15T10:15:00",
+      "end_time": "2024-01-15T10:25:00",
+      "interval_type": "MINUTES",
+      "interval_value": 10
+    }
+  ]
+}
+```
 
 ### 手动触发监控任务
 
@@ -200,12 +292,33 @@ table-names:
 http://localhost:8080/api/db-monitor/metrics
 ```
 
-主要指标包括：
+### 磁盘空间相关指标
 
 - `db_monitor_increment_total`：表增量数据总数
+- `db_monitor_estimated_disk_size_bytes`：表增量数据磁盘空间估算（字节）
+- `db_monitor_avg_row_size_bytes`：表平均行大小（字节）
+- `db_monitor_total_estimated_disk_size_bytes`：总磁盘空间估算（字节）
 - `db_monitor_last_execution_timestamp_seconds`：最后执行时间戳
 - `db_monitor_monitored_tables_total`：监控表总数
 - `db_monitor_datasource_health`：数据源健康状态
+
+### Grafana仪表板示例
+
+可以创建以下查询来监控磁盘空间使用情况：
+
+```promql
+# 总磁盘空间使用量
+db_monitor_total_estimated_disk_size_bytes
+
+# 各表磁盘空间使用排行
+topk(10, db_monitor_estimated_disk_size_bytes)
+
+# 磁盘空间使用率趋势
+rate(db_monitor_estimated_disk_size_bytes[5m])
+
+# 平均行大小分布
+histogram_quantile(0.95, db_monitor_avg_row_size_bytes)
+```
 
 ## XXL-Job集成
 
@@ -240,7 +353,7 @@ db:
 
 ## 监控数据表结构
 
-系统会自动创建名为`db_monitor_statistics`的监控数据表，结构如下：
+系统会自动创建名为`db_monitor_statistics`的监控数据表，**已更新**结构如下：
 
 ```sql
 CREATE TABLE `db_monitor_statistics` (
@@ -251,6 +364,8 @@ CREATE TABLE `db_monitor_statistics` (
   `start_time` datetime NOT NULL COMMENT '统计开始时间',
   `end_time` datetime NOT NULL COMMENT '统计结束时间',
   `increment_count` bigint(20) NOT NULL COMMENT '数据增量',
+  `estimated_disk_size_bytes` bigint(20) DEFAULT NULL COMMENT '增量数据预估磁盘空间大小（字节）',
+  `avg_row_size_bytes` bigint(20) DEFAULT NULL COMMENT '平均每行数据大小（字节）',
   `interval_type` varchar(20) NOT NULL COMMENT '时间间隔类型',
   `interval_value` int(11) NOT NULL COMMENT '时间间隔值',
   `created_time` datetime NOT NULL COMMENT '创建时间',
@@ -323,9 +438,11 @@ spring:
 
 1. 确保数据库表中有时间字段（created_time、create_time、gmt_create、created_at）
 2. 监控数据表会自动创建，确保数据库用户有创建表的权限
-3. 定期清理过期的监控数据，避免数据量过大
-4. 使用XXL-Job时，确保XXL-Job管理后台可以正常访问
-5. 大量表监控时，注意数据库性能影响
+3. **磁盘空间估算基于表结构和统计信息，可能与实际使用存在差异**
+4. **表结构信息会被缓存以提高性能，如有表结构变更，建议重启应用**
+5. 定期清理过期的监控数据，避免数据量过大
+6. 使用XXL-Job时，确保XXL-Job管理后台可以正常访问
+7. 大量表监控时，注意数据库性能影响
 
 ## 许可证
 
