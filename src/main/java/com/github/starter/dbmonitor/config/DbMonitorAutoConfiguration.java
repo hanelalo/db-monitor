@@ -8,6 +8,7 @@ import com.github.starter.dbmonitor.service.TablePatternService;
 import com.github.starter.dbmonitor.controller.DbMonitorController;
 import com.xxl.job.core.executor.XxlJobExecutor;
 import lombok.extern.slf4j.Slf4j;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,6 +28,7 @@ import javax.annotation.PreDestroy;
 @Configuration
 @EnableConfigurationProperties(DbMonitorProperties.class)
 @ComponentScan(basePackages = "com.github.starter.dbmonitor")
+@MapperScan("com.github.starter.dbmonitor.repository")
 @EnableScheduling
 @ConditionalOnProperty(prefix = "db.monitor", name = "enabled", havingValue = "true", matchIfMissing = true)
 @Slf4j
