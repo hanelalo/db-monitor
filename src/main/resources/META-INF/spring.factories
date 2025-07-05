@@ -1,2 +1,3 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\\
-com.example.incrementmonitor.DataIncrementMonitorAutoConfiguration
+com.example.incrementmonitor.DataIncrementMonitorAutoConfiguration,\\
+com.example.incrementmonitor.DataIncrementMonitorXxlJobAutoConfiguration

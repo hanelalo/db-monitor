@@ -22,6 +22,16 @@ public class DataIncrementMonitorProperties {
      */
     private String tables;
 
+    /**
+     * Whether to register XXL-Job handler (if XXL framework present).
+     */
+    private boolean xxlJobEnabled = true;
+
+    /**
+     * Name of the XXL-Job handler registered by this starter.
+     */
+    private String xxlJobHandlerName = "dataIncrementMonitorJob";
+
     public String getCron() {
         return cron;
     }
@@ -44,5 +54,21 @@ public class DataIncrementMonitorProperties {
 
     public void setTables(String tables) {
         this.tables = tables;
+    }
+
+    public boolean isXxlJobEnabled() {
+        return xxlJobEnabled;
+    }
+
+    public void setXxlJobEnabled(boolean xxlJobEnabled) {
+        this.xxlJobEnabled = xxlJobEnabled;
+    }
+
+    public String getXxlJobHandlerName() {
+        return xxlJobHandlerName;
+    }
+
+    public void setXxlJobHandlerName(String xxlJobHandlerName) {
+        this.xxlJobHandlerName = xxlJobHandlerName;
     }
 }

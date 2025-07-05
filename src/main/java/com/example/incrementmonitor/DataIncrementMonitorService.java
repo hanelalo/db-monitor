@@ -4,7 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
+import com.xxl.job.core.handler.annotation.XxlJob;
 
 import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
@@ -52,7 +52,7 @@ public class DataIncrementMonitorService {
     /**
      * Main task executed based on cron expression from properties.
      */
-    @Scheduled(cron = "#{@dataIncrementMonitorProperties.cron}")
+    @XxlJob("dataIncrementMonitorJob")
     public void monitor() {
         List<String> patterns = parseTablePatterns(properties.getTables());
         if (patterns.isEmpty()) {

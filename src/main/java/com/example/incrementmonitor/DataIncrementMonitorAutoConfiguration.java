@@ -12,7 +12,6 @@ import javax.sql.DataSource;
 @Configuration
 @ConditionalOnClass(DataSource.class)
 @EnableConfigurationProperties(DataIncrementMonitorProperties.class)
-@org.springframework.scheduling.annotation.EnableScheduling
 public class DataIncrementMonitorAutoConfiguration {
 
     @Bean
