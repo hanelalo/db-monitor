@@ -1,0 +1,162 @@
+{
+  "groups": [
+    {
+      "name": "db.monitor",
+      "type": "com.github.starter.dbmonitor.config.DbMonitorProperties",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties"
+    },
+    {
+      "name": "db.monitor.metrics",
+      "type": "com.github.starter.dbmonitor.config.DbMonitorProperties$Metrics",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties",
+      "sourceMethod": "public com.github.starter.dbmonitor.config.DbMonitorProperties.Metrics getMetrics() "
+    },
+    {
+      "name": "db.monitor.monitor-table",
+      "type": "com.github.starter.dbmonitor.config.DbMonitorProperties$MonitorTable",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties",
+      "sourceMethod": "public com.github.starter.dbmonitor.config.DbMonitorProperties.MonitorTable getMonitorTable() "
+    },
+    {
+      "name": "db.monitor.time-interval",
+      "type": "com.github.starter.dbmonitor.config.DbMonitorProperties$TimeInterval",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties",
+      "sourceMethod": "public com.github.starter.dbmonitor.config.DbMonitorProperties.TimeInterval getTimeInterval() "
+    },
+    {
+      "name": "db.monitor.xxl-job",
+      "type": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties",
+      "sourceMethod": "public com.github.starter.dbmonitor.config.DbMonitorProperties.XxlJobConfig getXxlJob() "
+    }
+  ],
+  "properties": [
+    {
+      "name": "db.monitor.data-source-name",
+      "type": "java.lang.String",
+      "description": "数据源名称，如果不指定则使用默认数据源",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties"
+    },
+    {
+      "name": "db.monitor.enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否启用数据库监控",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties"
+    },
+    {
+      "name": "db.monitor.metrics.enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否启用指标暴露",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$Metrics"
+    },
+    {
+      "name": "db.monitor.metrics.endpoint",
+      "type": "java.lang.String",
+      "description": "暴露端点路径",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$Metrics"
+    },
+    {
+      "name": "db.monitor.metrics.prefix",
+      "type": "java.lang.String",
+      "description": "指标前缀",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$Metrics"
+    },
+    {
+      "name": "db.monitor.monitor-table.auto-create",
+      "type": "java.lang.Boolean",
+      "description": "是否自动创建表",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$MonitorTable"
+    },
+    {
+      "name": "db.monitor.monitor-table.retention-days",
+      "type": "java.lang.Integer",
+      "description": "数据保留天数",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$MonitorTable"
+    },
+    {
+      "name": "db.monitor.monitor-table.table-name",
+      "type": "java.lang.String",
+      "description": "监控数据表名",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$MonitorTable"
+    },
+    {
+      "name": "db.monitor.table-names",
+      "type": "java.util.List<java.lang.String>",
+      "description": "需要监控的表名列表，支持通配符",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties"
+    },
+    {
+      "name": "db.monitor.time-interval.type",
+      "type": "java.lang.String",
+      "description": "时间间隔类型：MINUTES, HOURS",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$TimeInterval"
+    },
+    {
+      "name": "db.monitor.time-interval.value",
+      "type": "java.lang.Integer",
+      "description": "时间间隔值",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$TimeInterval"
+    },
+    {
+      "name": "db.monitor.xxl-job.access-token",
+      "type": "java.lang.String",
+      "description": "执行器通信TOKEN",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    },
+    {
+      "name": "db.monitor.xxl-job.address",
+      "type": "java.lang.String",
+      "description": "注册地址",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    },
+    {
+      "name": "db.monitor.xxl-job.admin-addresses",
+      "type": "java.lang.String",
+      "description": "XXL-Job管理后台地址",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    },
+    {
+      "name": "db.monitor.xxl-job.app-name",
+      "type": "java.lang.String",
+      "description": "应用名称",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    },
+    {
+      "name": "db.monitor.xxl-job.cron",
+      "type": "java.lang.String",
+      "description": "调度任务Cron表达式",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    },
+    {
+      "name": "db.monitor.xxl-job.enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否启用XXL-Job调度",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    },
+    {
+      "name": "db.monitor.xxl-job.ip",
+      "type": "java.lang.String",
+      "description": "执行器IP",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    },
+    {
+      "name": "db.monitor.xxl-job.log-path",
+      "type": "java.lang.String",
+      "description": "执行器日志路径",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    },
+    {
+      "name": "db.monitor.xxl-job.log-retention-days",
+      "type": "java.lang.Integer",
+      "description": "执行器日志文件保存天数",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    },
+    {
+      "name": "db.monitor.xxl-job.port",
+      "type": "java.lang.Integer",
+      "description": "执行器端口号",
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig"
+    }
+  ],
+  "hints": []
+}

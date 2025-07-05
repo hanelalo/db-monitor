@@ -1,0 +1,125 @@
+{
+  "properties": [
+    {
+      "name": "db.monitor.enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否启用数据库监控功能",
+      "defaultValue": true
+    },
+    {
+      "name": "db.monitor.data-source-name",
+      "type": "java.lang.String",
+      "description": "数据源名称，如果不指定则使用默认数据源",
+      "defaultValue": "primary"
+    },
+    {
+      "name": "db.monitor.table-names",
+      "type": "java.util.List<java.lang.String>",
+      "description": "需要监控的表名列表，支持通配符"
+    },
+    {
+      "name": "db.monitor.time-interval.type",
+      "type": "java.lang.String",
+      "description": "时间间隔类型：MINUTES, HOURS, DAYS",
+      "defaultValue": "MINUTES"
+    },
+    {
+      "name": "db.monitor.time-interval.value",
+      "type": "java.lang.Integer",
+      "description": "时间间隔值",
+      "defaultValue": 10
+    },
+    {
+      "name": "db.monitor.xxl-job.enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否启用XXL-Job调度",
+      "defaultValue": false
+    },
+    {
+      "name": "db.monitor.xxl-job.admin-addresses",
+      "type": "java.lang.String",
+      "description": "XXL-Job管理后台地址"
+    },
+    {
+      "name": "db.monitor.xxl-job.app-name",
+      "type": "java.lang.String",
+      "description": "应用名称",
+      "defaultValue": "db-monitor-executor"
+    },
+    {
+      "name": "db.monitor.xxl-job.address",
+      "type": "java.lang.String",
+      "description": "注册地址"
+    },
+    {
+      "name": "db.monitor.xxl-job.ip",
+      "type": "java.lang.String",
+      "description": "执行器IP"
+    },
+    {
+      "name": "db.monitor.xxl-job.port",
+      "type": "java.lang.Integer",
+      "description": "执行器端口号",
+      "defaultValue": 9999
+    },
+    {
+      "name": "db.monitor.xxl-job.access-token",
+      "type": "java.lang.String",
+      "description": "执行器通信TOKEN"
+    },
+    {
+      "name": "db.monitor.xxl-job.log-path",
+      "type": "java.lang.String",
+      "description": "执行器日志路径",
+      "defaultValue": "/data/applogs/xxl-job/jobhandler"
+    },
+    {
+      "name": "db.monitor.xxl-job.log-retention-days",
+      "type": "java.lang.Integer",
+      "description": "执行器日志文件保存天数",
+      "defaultValue": 30
+    },
+    {
+      "name": "db.monitor.xxl-job.cron",
+      "type": "java.lang.String",
+      "description": "调度任务Cron表达式",
+      "defaultValue": "0 */10 * * * ?"
+    },
+    {
+      "name": "db.monitor.monitor-table.table-name",
+      "type": "java.lang.String",
+      "description": "监控数据表名",
+      "defaultValue": "db_monitor_statistics"
+    },
+    {
+      "name": "db.monitor.monitor-table.auto-create",
+      "type": "java.lang.Boolean",
+      "description": "是否自动创建表",
+      "defaultValue": true
+    },
+    {
+      "name": "db.monitor.monitor-table.retention-days",
+      "type": "java.lang.Integer",
+      "description": "数据保留天数",
+      "defaultValue": 30
+    },
+    {
+      "name": "db.monitor.metrics.enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否启用指标暴露",
+      "defaultValue": true
+    },
+    {
+      "name": "db.monitor.metrics.prefix",
+      "type": "java.lang.String",
+      "description": "指标前缀",
+      "defaultValue": "db_monitor"
+    },
+    {
+      "name": "db.monitor.metrics.endpoint",
+      "type": "java.lang.String",
+      "description": "暴露端点路径",
+      "defaultValue": "/metrics"
+    }
+  ]
+}
