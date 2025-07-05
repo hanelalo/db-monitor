@@ -5,26 +5,21 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
 
 @Configuration
 @ConditionalOnClass(DataSource.class)
 @EnableConfigurationProperties(DataIncrementMonitorProperties.class)
+@org.springframework.scheduling.annotation.EnableScheduling
 public class DataIncrementMonitorAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public DataIncrementMonitorService dataIncrementMonitorService() {
-        // TODO: later implement the real service
-        return new DataIncrementMonitorService();
-    }
-
-    /**
-     * Placeholder service bean so that applications can autowire it while we
-     * flesh out the actual monitoring implementation in later steps.
-     */
-    public static class DataIncrementMonitorService {
-        // empty for now
+    public DataIncrementMonitorService dataIncrementMonitorService(javax.sql.DataSource dataSource,
+                                                                   org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
+                                                                   DataIncrementMonitorProperties properties) {
+        return new DataIncrementMonitorService(dataSource, jdbcTemplate, properties);
     }
 }

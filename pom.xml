@@ -35,6 +35,12 @@
             <version>2.4.0</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <!-- monitoring dependencies above -->
+        <!-- existing dependencies follow -->
     </dependencies>
 
     <build>
