@@ -101,8 +101,11 @@ public class DbMonitorService {
                 dbMonitorProperties.getTimeInterval().getValue()
             );
             
+            // 设置创建时间
+            statistics.setCreatedTime(LocalDateTime.now());
+            
             // 保存统计记录
-            statisticsRepository.save(statistics);
+            statisticsRepository.insert(statistics);
             
             log.info("表 {} 在时间范围 {} 到 {} 的增量数据为: {} 行，估计磁盘空间: {} 字节 ({})", 
                     tableName, startTime, endTime, incrementCount, 
