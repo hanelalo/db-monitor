@@ -55,6 +55,20 @@ public class DbMonitorController {
     }
     
     /**
+     * 获取磁盘空间汇总信息
+     */
+    @GetMapping("/disk-space/summary")
+    public ResponseEntity<Map<String, Object>> getDiskSpaceSummary() {
+        try {
+            Map<String, Object> summary = dbMonitorService.getDiskSpaceSummary();
+            return ResponseEntity.ok(summary);
+        } catch (Exception e) {
+            log.error("获取磁盘空间汇总信息失败: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    /**
      * 获取 Prometheus 格式的监控指标
      */
     @GetMapping("/metrics")

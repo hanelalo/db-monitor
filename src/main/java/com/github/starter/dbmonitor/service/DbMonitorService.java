@@ -34,6 +34,9 @@ public class DbMonitorService {
     @Autowired
     private TablePatternService tablePatternService;
     
+    @Autowired
+    private DiskSpaceEstimationService diskSpaceEstimationService;
+    
     private final Map<String, JdbcTemplate> jdbcTemplateCache = new ConcurrentHashMap<>();
     
     /**
@@ -81,6 +84,10 @@ public class DbMonitorService {
             // 查询表的增量数据
             Long incrementCount = queryTableIncrement(jdbcTemplate, tableName, startTime, endTime);
             
+            // 估算增量数据的磁盘空间使用量
+            DiskSpaceEstimationService.DiskSpaceEstimation diskSpaceEstimation = 
+                diskSpaceEstimationService.estimateIncrementalDiskSpace(jdbcTemplate, tableName, incrementCount);
+            
             // 创建统计记录
             DbMonitorStatistics statistics = new DbMonitorStatistics(
                 dbMonitorProperties.getDataSourceName(),
@@ -88,6 +95,8 @@ public class DbMonitorService {
                 startTime,
                 endTime,
                 incrementCount,
+                diskSpaceEstimation.getTotalEstimatedSize(),
+                diskSpaceEstimation.getAvgRowSize(),
                 dbMonitorProperties.getTimeInterval().getType(),
                 dbMonitorProperties.getTimeInterval().getValue()
             );
@@ -95,8 +104,10 @@ public class DbMonitorService {
             // 保存统计记录
             statisticsRepository.save(statistics);
             
-            log.info("表 {} 在时间范围 {} 到 {} 的增量数据为: {}", 
-                    tableName, startTime, endTime, incrementCount);
+            log.info("表 {} 在时间范围 {} 到 {} 的增量数据为: {} 行，估计磁盘空间: {} 字节 ({})", 
+                    tableName, startTime, endTime, incrementCount, 
+                    diskSpaceEstimation.getTotalEstimatedSize(), 
+                    formatBytes(diskSpaceEstimation.getTotalEstimatedSize()));
             
         } catch (Exception e) {
             log.error("监控表 {} 时发生错误: {}", tableName, e.getMessage(), e);
@@ -206,5 +217,55 @@ public class DbMonitorService {
         
         statisticsRepository.deleteByCreatedTimeBefore(cutoffTime);
         log.info("清理了 {} 天前的监控数据", retentionDays);
+    }
+    
+    /**
+     * 获取磁盘空间汇总信息
+     */
+    public Map<String, Object> getDiskSpaceSummary() {
+        List<DbMonitorStatistics> latestStatistics = getLatestStatistics();
+        
+        // 按表名分组获取最新的统计数据
+        Map<String, DbMonitorStatistics> latestByTable = new java.util.HashMap<>();
+        for (DbMonitorStatistics stat : latestStatistics) {
+            if (!latestByTable.containsKey(stat.getTableName())) {
+                latestByTable.put(stat.getTableName(), stat);
+            }
+        }
+        
+        // 计算汇总信息
+        long totalIncrementCount = 0;
+        long totalEstimatedDiskSize = 0;
+        
+        for (DbMonitorStatistics stat : latestByTable.values()) {
+            totalIncrementCount += stat.getIncrementCount();
+            if (stat.getEstimatedDiskSizeBytes() != null) {
+                totalEstimatedDiskSize += stat.getEstimatedDiskSizeBytes();
+            }
+        }
+        
+        Map<String, Object> summary = new java.util.HashMap<>();
+        summary.put("total_increment_count", totalIncrementCount);
+        summary.put("total_estimated_disk_size_bytes", totalEstimatedDiskSize);
+        summary.put("total_estimated_disk_size_formatted", formatBytes(totalEstimatedDiskSize));
+        summary.put("monitored_tables_count", latestByTable.size());
+        summary.put("timestamp", LocalDateTime.now());
+        
+        return summary;
+    }
+    
+    /**
+     * 格式化字节大小
+     */
+    private String formatBytes(long bytes) {
+        if (bytes < 1024) {
+            return bytes + " B";
+        } else if (bytes < 1024 * 1024) {
+            return String.format("%.2f KB", bytes / 1024.0);
+        } else if (bytes < 1024 * 1024 * 1024) {
+            return String.format("%.2f MB", bytes / (1024.0 * 1024.0));
+        } else {
+            return String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
+        }
     }
 }
