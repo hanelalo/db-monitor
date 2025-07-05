@@ -3,10 +3,10 @@ package com.github.starter.dbmonitor.service;
 import com.github.starter.dbmonitor.config.DbMonitorProperties;
 import com.github.starter.dbmonitor.entity.DbMonitorStatistics;
 import com.github.starter.dbmonitor.entity.MonitorConfig;
+import com.github.starter.dbmonitor.mapper.TableOperationMapper;
 import com.github.starter.dbmonitor.repository.DbMonitorStatisticsRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,7 +14,6 @@ import javax.sql.DataSource;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 数据库监控服务
@@ -41,7 +40,8 @@ public class DbMonitorService {
     @Autowired
     private MonitorConfigService monitorConfigService;
     
-    private final Map<String, JdbcTemplate> jdbcTemplateCache = new ConcurrentHashMap<>();
+    @Autowired
+    private TableOperationMapper tableOperationMapper;
     
     /**
      * 执行数据库监控任务
@@ -81,20 +81,16 @@ public class DbMonitorService {
      */
     private void monitorTableWithConfig(MonitorConfig config) {
         try {
-            // 获取数据源
-            DataSource dataSource = dataSourceService.getDataSource(config.getDataSourceName());
-            JdbcTemplate jdbcTemplate = getJdbcTemplate(dataSource);
-            
             // 计算时间范围
             LocalDateTime endTime = LocalDateTime.now();
             LocalDateTime startTime = calculateStartTime(endTime, config);
             
             // 使用配置的时间字段查询增量数据
-            Long incrementCount = queryTableIncrementWithConfig(jdbcTemplate, config, startTime, endTime);
+            Long incrementCount = queryTableIncrementWithConfig(config, startTime, endTime);
             
             // 估算增量数据的磁盘空间使用量
             DiskSpaceEstimationService.DiskSpaceEstimation diskSpaceEstimation = 
-                diskSpaceEstimationService.estimateIncrementalDiskSpace(jdbcTemplate, config.getTableName(), incrementCount);
+                diskSpaceEstimationService.estimateIncrementalDiskSpace(config.getTableName(), incrementCount);
             
             // 创建统计记录
             DbMonitorStatistics statistics = new DbMonitorStatistics(
@@ -129,15 +125,15 @@ public class DbMonitorService {
     /**
      * 监控单个表（保留原有方法以兼容）
      */
-    private void monitorTable(JdbcTemplate jdbcTemplate, String tableName, 
+    private void monitorTable(String tableName, 
                              LocalDateTime startTime, LocalDateTime endTime) {
         try {
             // 查询表的增量数据
-            Long incrementCount = queryTableIncrement(jdbcTemplate, tableName, startTime, endTime);
+            Long incrementCount = queryTableIncrement(tableName, startTime, endTime);
             
             // 估算增量数据的磁盘空间使用量
             DiskSpaceEstimationService.DiskSpaceEstimation diskSpaceEstimation = 
-                diskSpaceEstimationService.estimateIncrementalDiskSpace(jdbcTemplate, tableName, incrementCount);
+                diskSpaceEstimationService.estimateIncrementalDiskSpace(tableName, incrementCount);
             
             // 创建统计记录
             DbMonitorStatistics statistics = new DbMonitorStatistics(
@@ -172,15 +168,11 @@ public class DbMonitorService {
     /**
      * 使用监控配置查询表的增量数据
      */
-    private Long queryTableIncrementWithConfig(JdbcTemplate jdbcTemplate, MonitorConfig config, 
+    private Long queryTableIncrementWithConfig(MonitorConfig config, 
                                               LocalDateTime startTime, LocalDateTime endTime) {
         try {
-            String sql = String.format(
-                "SELECT COUNT(*) FROM %s WHERE %s >= ? AND %s < ?",
-                config.getTableName(), config.getTimeColumnName(), config.getTimeColumnName()
-            );
-            
-            Long count = jdbcTemplate.queryForObject(sql, Long.class, startTime, endTime);
+            Long count = tableOperationMapper.queryTableIncrement(
+                config.getTableName(), config.getTimeColumnName(), startTime, endTime);
             log.debug("表 {} 使用时间字段 {} 查询到增量数据: {}", 
                     config.getTableName(), config.getTimeColumnName(), count);
             return count != null ? count : 0L;
@@ -194,7 +186,7 @@ public class DbMonitorService {
     /**
      * 查询表的增量数据（保留原有方法以兼容）
      */
-    private Long queryTableIncrement(JdbcTemplate jdbcTemplate, String tableName, 
+    private Long queryTableIncrement(String tableName, 
                                    LocalDateTime startTime, LocalDateTime endTime) {
         try {
             // 尝试使用创建时间字段查询
@@ -202,12 +194,7 @@ public class DbMonitorService {
             
             for (String timeColumn : timeColumns) {
                 try {
-                    String sql = String.format(
-                        "SELECT COUNT(*) FROM %s WHERE %s >= ? AND %s < ?",
-                        tableName, timeColumn, timeColumn
-                    );
-                    
-                    Long count = jdbcTemplate.queryForObject(sql, Long.class, startTime, endTime);
+                    Long count = tableOperationMapper.queryTableIncrement(tableName, timeColumn, startTime, endTime);
                     log.debug("表 {} 使用时间字段 {} 查询到增量数据: {}", tableName, timeColumn, count);
                     return count != null ? count : 0L;
                     
@@ -229,9 +216,8 @@ public class DbMonitorService {
     /**
      * 获取需要监控的表名列表
      */
-    private List<String> getMonitoredTableNames(JdbcTemplate jdbcTemplate) {
+    private List<String> getMonitoredTableNames() {
         return tablePatternService.getMatchedTableNames(
-            jdbcTemplate, 
             dbMonitorProperties.getTableNames()
         );
     }
@@ -274,15 +260,7 @@ public class DbMonitorService {
         }
     }
     
-    /**
-     * 获取JdbcTemplate
-     */
-    private JdbcTemplate getJdbcTemplate(DataSource dataSource) {
-        return jdbcTemplateCache.computeIfAbsent(
-            dataSource.toString(), 
-            k -> new JdbcTemplate(dataSource)
-        );
-    }
+
     
     /**
      * 获取最新的监控统计数据

@@ -1,12 +1,12 @@
 package com.github.starter.dbmonitor.service;
 
+import com.github.starter.dbmonitor.mapper.TableOperationMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -16,18 +16,19 @@ import java.util.Map;
 @Slf4j
 public class DiskSpaceEstimationService {
     
+    @Autowired
+    private TableOperationMapper tableOperationMapper;
+    
     private final Map<String, Long> tableRowSizeCache = new HashMap<>();
     
     /**
      * 估算增量数据的磁盘空间使用量
      * 
-     * @param jdbcTemplate JDBC模板
      * @param tableName 表名
      * @param incrementCount 增量数据行数
      * @return 磁盘空间估计结果
      */
-    public DiskSpaceEstimation estimateIncrementalDiskSpace(JdbcTemplate jdbcTemplate, 
-                                                           String tableName, 
+    public DiskSpaceEstimation estimateIncrementalDiskSpace(String tableName, 
                                                            Long incrementCount) {
         try {
             if (incrementCount == null || incrementCount <= 0) {
@@ -35,7 +36,7 @@ public class DiskSpaceEstimationService {
             }
             
             // 获取表的平均行大小
-            Long avgRowSize = getAvgRowSize(jdbcTemplate, tableName);
+            Long avgRowSize = getAvgRowSize(tableName);
             
             // 计算总的磁盘空间估计
             Long totalEstimatedSize = avgRowSize * incrementCount;
@@ -54,14 +55,14 @@ public class DiskSpaceEstimationService {
     /**
      * 获取表的平均行大小
      */
-    private Long getAvgRowSize(JdbcTemplate jdbcTemplate, String tableName) {
+    private Long getAvgRowSize(String tableName) {
         // 先从缓存中获取
         String cacheKey = tableName.toLowerCase();
         if (tableRowSizeCache.containsKey(cacheKey)) {
             return tableRowSizeCache.get(cacheKey);
         }
         
-        Long avgRowSize = calculateAvgRowSize(jdbcTemplate, tableName);
+        Long avgRowSize = calculateAvgRowSize(tableName);
         
         // 缓存结果（缓存30分钟）
         tableRowSizeCache.put(cacheKey, avgRowSize);
@@ -72,22 +73,22 @@ public class DiskSpaceEstimationService {
     /**
      * 计算表的平均行大小
      */
-    private Long calculateAvgRowSize(JdbcTemplate jdbcTemplate, String tableName) {
+    private Long calculateAvgRowSize(String tableName) {
         try {
             // 方法1: 尝试使用 INFORMATION_SCHEMA 获取表统计信息
-            Long avgRowSize = getAvgRowSizeFromInformationSchema(jdbcTemplate, tableName);
+            Long avgRowSize = getAvgRowSizeFromInformationSchema(tableName);
             if (avgRowSize != null && avgRowSize > 0) {
                 return avgRowSize;
             }
             
             // 方法2: 尝试使用 SHOW TABLE STATUS 获取表统计信息
-            avgRowSize = getAvgRowSizeFromShowTableStatus(jdbcTemplate, tableName);
+            avgRowSize = getAvgRowSizeFromShowTableStatus(tableName);
             if (avgRowSize != null && avgRowSize > 0) {
                 return avgRowSize;
             }
             
             // 方法3: 基于表结构估算行大小
-            avgRowSize = estimateRowSizeFromSchema(jdbcTemplate, tableName);
+            avgRowSize = estimateRowSizeFromSchema(tableName);
             if (avgRowSize != null && avgRowSize > 0) {
                 return avgRowSize;
             }
@@ -104,12 +105,9 @@ public class DiskSpaceEstimationService {
     /**
      * 从 INFORMATION_SCHEMA 获取平均行大小
      */
-    private Long getAvgRowSizeFromInformationSchema(JdbcTemplate jdbcTemplate, String tableName) {
+    private Long getAvgRowSizeFromInformationSchema(String tableName) {
         try {
-            String sql = "SELECT AVG_ROW_LENGTH FROM INFORMATION_SCHEMA.TABLES " +
-                        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?";
-            
-            return jdbcTemplate.queryForObject(sql, Long.class, tableName);
+            return tableOperationMapper.getAvgRowSizeFromInformationSchema(tableName);
         } catch (Exception e) {
             log.debug("无法从 INFORMATION_SCHEMA 获取表 {} 的平均行大小: {}", tableName, e.getMessage());
             return null;
@@ -119,20 +117,23 @@ public class DiskSpaceEstimationService {
     /**
      * 从 SHOW TABLE STATUS 获取平均行大小
      */
-    private Long getAvgRowSizeFromShowTableStatus(JdbcTemplate jdbcTemplate, String tableName) {
+    private Long getAvgRowSizeFromShowTableStatus(String tableName) {
         try {
-            String sql = "SHOW TABLE STATUS LIKE ?";
-            
-            return jdbcTemplate.queryForObject(sql, (ResultSet rs, int rowNum) -> {
-                Long dataLength = rs.getLong("Data_length");
-                Long rows = rs.getLong("Rows");
+            Map<String, Object> tableStatus = tableOperationMapper.getTableStatusInfo(tableName);
+            if (tableStatus != null && !tableStatus.isEmpty()) {
+                Object dataLengthObj = tableStatus.get("Data_length");
+                Object rowsObj = tableStatus.get("Rows");
                 
-                if (rows != null && rows > 0 && dataLength != null) {
-                    return dataLength / rows;
+                if (dataLengthObj != null && rowsObj != null) {
+                    Long dataLength = Long.valueOf(dataLengthObj.toString());
+                    Long rows = Long.valueOf(rowsObj.toString());
+                    
+                    if (rows > 0 && dataLength > 0) {
+                        return dataLength / rows;
+                    }
                 }
-                return null;
-            }, tableName);
-            
+            }
+            return null;
         } catch (Exception e) {
             log.debug("无法从 SHOW TABLE STATUS 获取表 {} 的平均行大小: {}", tableName, e.getMessage());
             return null;
@@ -142,29 +143,20 @@ public class DiskSpaceEstimationService {
     /**
      * 基于表结构估算行大小
      */
-    private Long estimateRowSizeFromSchema(JdbcTemplate jdbcTemplate, String tableName) {
+    private Long estimateRowSizeFromSchema(String tableName) {
         try {
-            String sql = "SELECT COLUMN_NAME, DATA_TYPE, " +
-                        "IFNULL(CHARACTER_MAXIMUM_LENGTH, 0) as CHAR_LENGTH, " +
-                        "IFNULL(NUMERIC_PRECISION, 0) as NUM_PRECISION, " +
-                        "IFNULL(NUMERIC_SCALE, 0) as NUM_SCALE " +
-                        "FROM INFORMATION_SCHEMA.COLUMNS " +
-                        "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?";
+            List<Map<String, Object>> schemaInfo = tableOperationMapper.getTableSchemaInfo(tableName);
             
-            return jdbcTemplate.query(sql, (ResultSet rs) -> {
-                long totalSize = 0;
+            long totalSize = 0;
+            for (Map<String, Object> columnInfo : schemaInfo) {
+                String dataType = columnInfo.get("DATA_TYPE").toString().toLowerCase();
+                long charLength = Long.valueOf(columnInfo.get("CHAR_LENGTH").toString());
+                int numPrecision = Integer.valueOf(columnInfo.get("NUM_PRECISION").toString());
                 
-                while (rs.next()) {
-                    String dataType = rs.getString("DATA_TYPE").toLowerCase();
-                    long charLength = rs.getLong("CHAR_LENGTH");
-                    int numPrecision = rs.getInt("NUM_PRECISION");
-                    
-                    totalSize += estimateColumnSize(dataType, charLength, numPrecision);
-                }
-                
-                return totalSize > 0 ? totalSize : null;
-            }, tableName);
+                totalSize += estimateColumnSize(dataType, charLength, numPrecision);
+            }
             
+            return totalSize > 0 ? totalSize : null;
         } catch (Exception e) {
             log.debug("无法基于表结构估算表 {} 的行大小: {}", tableName, e.getMessage());
             return null;
