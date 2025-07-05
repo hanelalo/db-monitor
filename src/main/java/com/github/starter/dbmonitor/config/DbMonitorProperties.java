@@ -47,6 +47,11 @@ public class DbMonitorProperties {
      */
     private Metrics metrics = new Metrics();
     
+    /**
+     * 磁盘大小估算配置
+     */
+    private DiskSize diskSize = new DiskSize();
+    
     @Data
     public static class TimeInterval {
         /**
@@ -147,5 +152,38 @@ public class DbMonitorProperties {
          * 暴露端点路径
          */
         private String endpoint = "/metrics";
+    }
+    
+    @Data
+    public static class DiskSize {
+        /**
+         * 是否启用磁盘大小估算
+         */
+        private boolean enabled = true;
+        
+        /**
+         * 默认行大小（字节）
+         */
+        private Long defaultRowSizeBytes = 100L;
+        
+        /**
+         * 索引开销比例（相对于数据大小）
+         */
+        private double indexOverheadRatio = 0.25;
+        
+        /**
+         * 存储开销比例（相对于理论大小）
+         */
+        private double storageOverheadRatio = 0.3;
+        
+        /**
+         * 是否缓存平均行大小
+         */
+        private boolean cacheEnabled = true;
+        
+        /**
+         * 缓存过期时间（分钟）
+         */
+        private int cacheExpirationMinutes = 60;
     }
 }

@@ -27,6 +27,9 @@ public class DbMonitorMetricsService {
     @Autowired
     private DataSourceService dataSourceService;
     
+    @Autowired
+    private DiskSizeEstimationService diskSizeEstimationService;
+    
     /**
      * 生成 Prometheus 格式的监控指标
      */
@@ -79,6 +82,38 @@ public class DbMonitorMetricsService {
             metrics.append("# TYPE db_monitor_monitored_tables_total gauge\n");
             metrics.append(String.format("db_monitor_monitored_tables_total{data_source=\"%s\"} %d\n",
                     dbMonitorProperties.getDataSourceName(), latestStatistics.size()));
+            
+            // 生成增量数据大小指标
+            metrics.append("\n# HELP db_monitor_increment_size_bytes Total size in bytes of records added to table in the specified time interval\n");
+            metrics.append("# TYPE db_monitor_increment_size_bytes gauge\n");
+            
+            for (DbMonitorStatistics stat : latestStatistics.values()) {
+                if (stat.getIncrementSizeBytes() != null) {
+                    metrics.append(String.format(
+                            "db_monitor_increment_size_bytes{data_source=\"%s\",table=\"%s\",interval_type=\"%s\",interval_value=\"%d\"} %d\n",
+                            stat.getDataSourceName(),
+                            stat.getTableName(),
+                            stat.getIntervalType(),
+                            stat.getIntervalValue(),
+                            stat.getIncrementSizeBytes()
+                    ));
+                }
+            }
+            
+            // 生成平均行大小指标
+            metrics.append("\n# HELP db_monitor_avg_row_size_bytes Average row size in bytes for each table\n");
+            metrics.append("# TYPE db_monitor_avg_row_size_bytes gauge\n");
+            
+            for (DbMonitorStatistics stat : latestStatistics.values()) {
+                if (stat.getAvgRowSizeBytes() != null) {
+                    metrics.append(String.format(
+                            "db_monitor_avg_row_size_bytes{data_source=\"%s\",table=\"%s\"} %d\n",
+                            stat.getDataSourceName(),
+                            stat.getTableName(),
+                            stat.getAvgRowSizeBytes()
+                    ));
+                }
+            }
             
             // 生成数据源健康状态指标
             metrics.append("\n# HELP db_monitor_datasource_health Data source health status (1=healthy, 0=unhealthy)\n");
@@ -135,6 +170,17 @@ public class DbMonitorMetricsService {
                 tableMetric.put("end_time", stat.getEndTime().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
                 tableMetric.put("interval_type", stat.getIntervalType());
                 tableMetric.put("interval_value", stat.getIntervalValue());
+                
+                // 磁盘大小相关信息
+                if (stat.getIncrementSizeBytes() != null) {
+                    tableMetric.put("increment_size_bytes", stat.getIncrementSizeBytes());
+                    tableMetric.put("increment_size_formatted", diskSizeEstimationService.formatBytes(stat.getIncrementSizeBytes()));
+                }
+                if (stat.getAvgRowSizeBytes() != null) {
+                    tableMetric.put("avg_row_size_bytes", stat.getAvgRowSizeBytes());
+                    tableMetric.put("avg_row_size_formatted", diskSizeEstimationService.formatBytes(stat.getAvgRowSizeBytes()));
+                }
+                
                 tableMetrics.add(tableMetric);
             }
             metrics.put("table_metrics", tableMetrics);
@@ -144,6 +190,16 @@ public class DbMonitorMetricsService {
                     .mapToLong(DbMonitorStatistics::getIncrementCount)
                     .sum();
             metrics.put("total_increment_count", totalIncrementCount);
+            
+            // 汇总磁盘大小统计
+            long totalIncrementSize = latestStatistics.values().stream()
+                    .filter(stat -> stat.getIncrementSizeBytes() != null)
+                    .mapToLong(DbMonitorStatistics::getIncrementSizeBytes)
+                    .sum();
+            if (totalIncrementSize > 0) {
+                metrics.put("total_increment_size_bytes", totalIncrementSize);
+                metrics.put("total_increment_size_formatted", diskSizeEstimationService.formatBytes(totalIncrementSize));
+            }
             
         } catch (Exception e) {
             log.error("生成 JSON 指标失败: {}", e.getMessage(), e);

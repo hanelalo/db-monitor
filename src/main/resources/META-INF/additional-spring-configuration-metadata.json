@@ -120,6 +120,42 @@
       "type": "java.lang.String",
       "description": "暴露端点路径",
       "defaultValue": "/metrics"
+    },
+    {
+      "name": "db.monitor.disk-size.enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否启用磁盘大小估算",
+      "defaultValue": true
+    },
+    {
+      "name": "db.monitor.disk-size.default-row-size-bytes",
+      "type": "java.lang.Long",
+      "description": "默认行大小（字节）",
+      "defaultValue": 100
+    },
+    {
+      "name": "db.monitor.disk-size.index-overhead-ratio",
+      "type": "java.lang.Double",
+      "description": "索引开销比例（相对于数据大小）",
+      "defaultValue": 0.25
+    },
+    {
+      "name": "db.monitor.disk-size.storage-overhead-ratio",
+      "type": "java.lang.Double",
+      "description": "存储开销比例（相对于理论大小）",
+      "defaultValue": 0.3
+    },
+    {
+      "name": "db.monitor.disk-size.cache-enabled",
+      "type": "java.lang.Boolean",
+      "description": "是否缓存平均行大小",
+      "defaultValue": true
+    },
+    {
+      "name": "db.monitor.disk-size.cache-expiration-minutes",
+      "type": "java.lang.Integer",
+      "description": "缓存过期时间（分钟）",
+      "defaultValue": 60
     }
   ]
 }

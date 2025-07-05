@@ -49,6 +49,13 @@ db:
       enabled: true
       prefix: db_monitor
       endpoint: /metrics
+    disk-size:
+      enabled: true
+      default-row-size-bytes: 100
+      index-overhead-ratio: 0.25
+      storage-overhead-ratio: 0.3
+      cache-enabled: true
+      cache-expiration-minutes: 60
 
 # Spring Boot Actuator配置
 management:

@@ -3,6 +3,7 @@ package com.github.starter.dbmonitor.controller;
 import com.github.starter.dbmonitor.entity.DbMonitorStatistics;
 import com.github.starter.dbmonitor.service.DbMonitorService;
 import com.github.starter.dbmonitor.service.DbMonitorMetricsService;
+import com.github.starter.dbmonitor.service.DiskSizeEstimationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,9 @@ public class DbMonitorController {
     
     @Autowired
     private DbMonitorMetricsService metricsService;
+    
+    @Autowired
+    private DiskSizeEstimationService diskSizeEstimationService;
     
     /**
      * 获取最新的监控统计数据
@@ -123,6 +127,52 @@ public class DbMonitorController {
         } catch (Exception e) {
             log.error("清理过期数据失败: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("清理过期数据失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 清理磁盘大小估算缓存
+     */
+    @DeleteMapping("/cache/disk-size")
+    public ResponseEntity<String> clearDiskSizeCache() {
+        try {
+            diskSizeEstimationService.clearCache();
+            return ResponseEntity.ok("磁盘大小估算缓存清理完成");
+        } catch (Exception e) {
+            log.error("清理磁盘大小估算缓存失败: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("清理缓存失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 清理指定表的磁盘大小估算缓存
+     */
+    @DeleteMapping("/cache/disk-size/{tableName}")
+    public ResponseEntity<String> clearTableDiskSizeCache(@PathVariable String tableName) {
+        try {
+            diskSizeEstimationService.clearCache(tableName);
+            return ResponseEntity.ok("表 " + tableName + " 的磁盘大小估算缓存清理完成");
+        } catch (Exception e) {
+            log.error("清理表 {} 的磁盘大小估算缓存失败: {}", tableName, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("清理缓存失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 格式化字节大小
+     */
+    @GetMapping("/utils/format-bytes/{bytes}")
+    public ResponseEntity<Map<String, Object>> formatBytes(@PathVariable Long bytes) {
+        try {
+            String formatted = diskSizeEstimationService.formatBytes(bytes);
+            Map<String, Object> result = Map.of(
+                "bytes", bytes,
+                "formatted", formatted
+            );
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("格式化字节大小失败: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }

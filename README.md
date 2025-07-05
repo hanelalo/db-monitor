@@ -12,6 +12,7 @@
 - ✅ 监控数据暴露接口，用来对接Prometheus、Grafana等监控工具
 - ✅ 支持Spring Boot 2.3.12
 - ✅ 支持指定数据源
+- ✅ **磁盘大小估算**：自动计算增量数据所占磁盘大小的预估值
 
 ## 快速开始
 
@@ -106,6 +107,17 @@ db:
 | `db.monitor.metrics.prefix` | String | `db_monitor` | 指标前缀 |
 | `db.monitor.metrics.endpoint` | String | `/metrics` | 暴露端点路径 |
 
+### 磁盘大小估算配置
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `db.monitor.disk-size.enabled` | Boolean | `true` | 是否启用磁盘大小估算 |
+| `db.monitor.disk-size.default-row-size-bytes` | Long | `100` | 默认行大小（字节） |
+| `db.monitor.disk-size.index-overhead-ratio` | Double | `0.25` | 索引开销比例（相对于数据大小） |
+| `db.monitor.disk-size.storage-overhead-ratio` | Double | `0.3` | 存储开销比例（相对于理论大小） |
+| `db.monitor.disk-size.cache-enabled` | Boolean | `true` | 是否缓存平均行大小 |
+| `db.monitor.disk-size.cache-expiration-minutes` | Integer | `60` | 缓存过期时间（分钟） |
+
 ## API接口
 
 ### 获取监控统计数据
@@ -164,6 +176,30 @@ DELETE /api/db-monitor/cleanup
 
 清理过期的监控数据。
 
+### 清理磁盘大小估算缓存
+
+```http
+DELETE /api/db-monitor/cache/disk-size
+```
+
+清理所有表的磁盘大小估算缓存。
+
+### 清理指定表的磁盘大小估算缓存
+
+```http
+DELETE /api/db-monitor/cache/disk-size/{tableName}
+```
+
+清理指定表的磁盘大小估算缓存。
+
+### 格式化字节大小
+
+```http
+GET /api/db-monitor/utils/format-bytes/{bytes}
+```
+
+将字节数格式化为可读的大小格式（B、KB、MB、GB、TB）。
+
 ## 表名通配符匹配
 
 支持以下通配符模式：
@@ -192,6 +228,38 @@ table-names:
 
 如果表中没有这些字段，将返回增量数据为0。
 
+## 磁盘大小估算
+
+系统会自动估算增量数据所占用的磁盘大小，包括：
+
+### 估算方法
+
+1. **平均行大小计算**：
+   - 首先尝试从 `INFORMATION_SCHEMA.TABLES` 获取精确的平均行大小
+   - 如果失败，则通过分析表结构计算理论行大小
+   - 最后回退到使用配置的默认行大小
+
+2. **磁盘大小计算**：
+   - 基础数据大小 = 平均行大小 × 增量行数
+   - 索引开销 = 基础数据大小 × 索引开销比例（默认25%）
+   - 总磁盘大小 = 基础数据大小 + 索引开销
+
+3. **缓存机制**：
+   - 平均行大小会被缓存以提高性能
+   - 缓存时间可配置（默认60分钟）
+   - 支持手动清理缓存
+
+### 配置参数说明
+
+- **默认行大小**：当无法计算实际行大小时使用的默认值
+- **索引开销比例**：索引相对于数据的空间开销比例
+- **存储开销比例**：实际存储相对于理论大小的开销比例
+- **缓存设置**：控制平均行大小的缓存行为
+
+### 支持的数据库
+
+目前主要支持MySQL数据库的磁盘大小估算，其他数据库会使用默认的估算方法。
+
 ## Prometheus集成
 
 启用指标暴露后，可以通过以下端点获取Prometheus格式的指标：
@@ -203,6 +271,8 @@ http://localhost:8080/api/db-monitor/metrics
 主要指标包括：
 
 - `db_monitor_increment_total`：表增量数据总数
+- `db_monitor_increment_size_bytes`：表增量数据大小（字节）
+- `db_monitor_avg_row_size_bytes`：表平均行大小（字节）
 - `db_monitor_last_execution_timestamp_seconds`：最后执行时间戳
 - `db_monitor_monitored_tables_total`：监控表总数
 - `db_monitor_datasource_health`：数据源健康状态
@@ -251,6 +321,8 @@ CREATE TABLE `db_monitor_statistics` (
   `start_time` datetime NOT NULL COMMENT '统计开始时间',
   `end_time` datetime NOT NULL COMMENT '统计结束时间',
   `increment_count` bigint(20) NOT NULL COMMENT '数据增量',
+  `increment_size_bytes` bigint(20) COMMENT '增量数据磁盘大小（字节）',
+  `avg_row_size_bytes` bigint(20) COMMENT '平均行大小（字节）',
   `interval_type` varchar(20) NOT NULL COMMENT '时间间隔类型',
   `interval_value` int(11) NOT NULL COMMENT '时间间隔值',
   `created_time` datetime NOT NULL COMMENT '创建时间',
@@ -291,6 +363,13 @@ db:
       enabled: true
       prefix: db_monitor
       endpoint: /metrics
+    disk-size:
+      enabled: true
+      default-row-size-bytes: 100
+      index-overhead-ratio: 0.25
+      storage-overhead-ratio: 0.3
+      cache-enabled: true
+      cache-expiration-minutes: 60
 
 # Spring Boot Actuator配置
 management:

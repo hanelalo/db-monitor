@@ -34,6 +34,9 @@ public class DbMonitorService {
     @Autowired
     private TablePatternService tablePatternService;
     
+    @Autowired
+    private DiskSizeEstimationService diskSizeEstimationService;
+    
     private final Map<String, JdbcTemplate> jdbcTemplateCache = new ConcurrentHashMap<>();
     
     /**
@@ -81,22 +84,49 @@ public class DbMonitorService {
             // 查询表的增量数据
             Long incrementCount = queryTableIncrement(jdbcTemplate, tableName, startTime, endTime);
             
+            // 估算磁盘大小
+            DiskSizeEstimationService.TableSizeInfo sizeInfo = null;
+            if (dbMonitorProperties.getDiskSize().isEnabled()) {
+                sizeInfo = diskSizeEstimationService.estimateIncrementSize(jdbcTemplate, tableName, incrementCount);
+            }
+            
             // 创建统计记录
-            DbMonitorStatistics statistics = new DbMonitorStatistics(
-                dbMonitorProperties.getDataSourceName(),
-                tableName,
-                startTime,
-                endTime,
-                incrementCount,
-                dbMonitorProperties.getTimeInterval().getType(),
-                dbMonitorProperties.getTimeInterval().getValue()
-            );
+            DbMonitorStatistics statistics;
+            if (sizeInfo != null) {
+                statistics = new DbMonitorStatistics(
+                    dbMonitorProperties.getDataSourceName(),
+                    tableName,
+                    startTime,
+                    endTime,
+                    incrementCount,
+                    sizeInfo.getTotalSizeBytes(),
+                    sizeInfo.getAvgRowSizeBytes(),
+                    dbMonitorProperties.getTimeInterval().getType(),
+                    dbMonitorProperties.getTimeInterval().getValue()
+                );
+            } else {
+                statistics = new DbMonitorStatistics(
+                    dbMonitorProperties.getDataSourceName(),
+                    tableName,
+                    startTime,
+                    endTime,
+                    incrementCount,
+                    dbMonitorProperties.getTimeInterval().getType(),
+                    dbMonitorProperties.getTimeInterval().getValue()
+                );
+            }
             
             // 保存统计记录
             statisticsRepository.save(statistics);
             
-            log.info("表 {} 在时间范围 {} 到 {} 的增量数据为: {}", 
-                    tableName, startTime, endTime, incrementCount);
+            if (sizeInfo != null) {
+                String formattedSize = diskSizeEstimationService.formatBytes(sizeInfo.getTotalSizeBytes());
+                log.info("表 {} 在时间范围 {} 到 {} 的增量数据为: {} 行, 预估大小: {}", 
+                        tableName, startTime, endTime, incrementCount, formattedSize);
+            } else {
+                log.info("表 {} 在时间范围 {} 到 {} 的增量数据为: {} 行", 
+                        tableName, startTime, endTime, incrementCount);
+            }
             
         } catch (Exception e) {
             log.error("监控表 {} 时发生错误: {}", tableName, e.getMessage(), e);

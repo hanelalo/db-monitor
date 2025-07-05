@@ -58,6 +58,18 @@ public class DbMonitorStatistics {
     private Long incrementCount;
     
     /**
+     * 增量数据磁盘大小（字节）
+     */
+    @Column(name = "increment_size_bytes")
+    private Long incrementSizeBytes;
+    
+    /**
+     * 平均行大小（字节）
+     */
+    @Column(name = "avg_row_size_bytes")
+    private Long avgRowSizeBytes;
+    
+    /**
      * 时间间隔类型
      */
     @Column(name = "interval_type", nullable = false, length = 20)
@@ -98,6 +110,26 @@ public class DbMonitorStatistics {
         this.startTime = startTime;
         this.endTime = endTime;
         this.incrementCount = incrementCount;
+        this.intervalType = intervalType;
+        this.intervalValue = intervalValue;
+        this.createdTime = LocalDateTime.now();
+    }
+    
+    /**
+     * 构造函数（包含磁盘大小）
+     */
+    public DbMonitorStatistics(String dataSourceName, String tableName, 
+                               LocalDateTime startTime, LocalDateTime endTime, 
+                               Long incrementCount, Long incrementSizeBytes, Long avgRowSizeBytes,
+                               String intervalType, Integer intervalValue) {
+        this.dataSourceName = dataSourceName;
+        this.tableName = tableName;
+        this.statisticTime = LocalDateTime.now();
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.incrementCount = incrementCount;
+        this.incrementSizeBytes = incrementSizeBytes;
+        this.avgRowSizeBytes = avgRowSizeBytes;
         this.intervalType = intervalType;
         this.intervalValue = intervalValue;
         this.createdTime = LocalDateTime.now();

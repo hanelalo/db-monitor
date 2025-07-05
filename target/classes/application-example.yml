@@ -42,6 +42,15 @@ db:
       enabled: true       # 是否启用指标暴露
       prefix: db_monitor  # 指标前缀
       endpoint: /metrics  # 暴露端点路径
+    
+    # 磁盘大小估算配置
+    disk-size:
+      enabled: true                    # 是否启用磁盘大小估算
+      default-row-size-bytes: 100      # 默认行大小（字节）
+      index-overhead-ratio: 0.25       # 索引开销比例（相对于数据大小）
+      storage-overhead-ratio: 0.3      # 存储开销比例（相对于理论大小）
+      cache-enabled: true              # 是否缓存平均行大小
+      cache-expiration-minutes: 60     # 缓存过期时间（分钟）
 
 # Spring Boot Actuator配置（可选）
 management:

@@ -79,6 +79,9 @@ curl -X POST http://localhost:8080/api/db-monitor/trigger
 - `GET /api/db-monitor/health` - 获取健康状态
 - `POST /api/db-monitor/trigger` - 手动触发监控任务
 - `DELETE /api/db-monitor/cleanup` - 清理过期数据
+- `DELETE /api/db-monitor/cache/disk-size` - 清理磁盘大小估算缓存
+- `DELETE /api/db-monitor/cache/disk-size/{tableName}` - 清理指定表的磁盘大小估算缓存
+- `GET /api/db-monitor/utils/format-bytes/{bytes}` - 格式化字节大小
 
 ### 系统接口
 

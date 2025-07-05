@@ -5,6 +5,7 @@ import com.github.starter.dbmonitor.service.DbMonitorService;
 import com.github.starter.dbmonitor.service.DbMonitorMetricsService;
 import com.github.starter.dbmonitor.service.DataSourceService;
 import com.github.starter.dbmonitor.service.TablePatternService;
+import com.github.starter.dbmonitor.service.DiskSizeEstimationService;
 import com.github.starter.dbmonitor.controller.DbMonitorController;
 import com.xxl.job.core.executor.XxlJobExecutor;
 import lombok.extern.slf4j.Slf4j;
@@ -134,6 +135,16 @@ public class DbMonitorAutoConfiguration {
     @ConditionalOnMissingBean(TablePatternService.class)
     public TablePatternService tablePatternService() {
         return new TablePatternService();
+    }
+    
+    /**
+     * 磁盘大小估算服务
+     */
+    @Bean
+    @ConditionalOnMissingBean(DiskSizeEstimationService.class)
+    @ConditionalOnProperty(prefix = "db.monitor.disk-size", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public DiskSizeEstimationService diskSizeEstimationService() {
+        return new DiskSizeEstimationService();
     }
     
     /**
