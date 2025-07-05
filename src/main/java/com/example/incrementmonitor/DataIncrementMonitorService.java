@@ -5,6 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import com.xxl.job.core.handler.annotation.XxlJob;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
@@ -26,13 +28,20 @@ public class DataIncrementMonitorService {
     private final DataSource dataSource;
     private final JdbcTemplate jdbcTemplate;
     private final DataIncrementMonitorProperties properties;
+    private final MeterRegistry meterRegistry;
+
+    private final Map<String, Long> latestIncrementMap = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Long> latestRowCountMap = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Set<String> gaugesRegistered = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public DataIncrementMonitorService(DataSource dataSource,
                                        JdbcTemplate jdbcTemplate,
-                                       DataIncrementMonitorProperties properties) {
+                                       DataIncrementMonitorProperties properties,
+                                       @org.springframework.lang.Nullable MeterRegistry meterRegistry) {
         this.dataSource = dataSource;
         this.jdbcTemplate = jdbcTemplate;
         this.properties = properties;
+        this.meterRegistry = meterRegistry;
     }
 
     @PostConstruct
@@ -89,9 +98,27 @@ public class DataIncrementMonitorService {
             Long previousCount = getPreviousRowCount(tableName);
             long increment = previousCount == null ? 0L : currentCount - previousCount;
 
+            // persist stats to monitoring table
             jdbcTemplate.update(
                     "INSERT INTO " + MONITOR_TABLE_NAME + " (table_name, record_time, row_count, increment) VALUES (?,?,?,?)",
                     tableName, recordTime, currentCount, increment);
+
+            // update in-memory maps for metrics
+            latestIncrementMap.put(tableName, increment);
+            latestRowCountMap.put(tableName, currentCount);
+
+            // register gauges on first encounter
+            if (meterRegistry != null && gaugesRegistered.add(tableName)) {
+                Gauge.builder("db_table_increment", latestIncrementMap, m -> m.getOrDefault(tableName, 0L))
+                        .description("Rows inserted into table during last monitoring window")
+                        .tag("table", tableName)
+                        .register(meterRegistry);
+
+                Gauge.builder("db_table_row_count", latestRowCountMap, m -> m.getOrDefault(tableName, 0L))
+                        .description("Current total row count of table")
+                        .tag("table", tableName)
+                        .register(meterRegistry);
+            }
 
             logger.debug("Recorded stats for table {}: currentCount={}, increment={}", tableName, currentCount, increment);
         } catch (Exception e) {
@@ -116,5 +143,13 @@ public class DataIncrementMonitorService {
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toList());
+    }
+
+    /* package */ Map<String, Long> getLatestIncrementMap() {
+        return latestIncrementMap;
+    }
+
+    /* package */ Map<String, Long> getLatestRowCountMap() {
+        return latestRowCountMap;
     }
 }
