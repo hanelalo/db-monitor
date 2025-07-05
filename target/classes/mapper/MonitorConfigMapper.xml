@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.github.starter.dbmonitor.mapper.MonitorConfigMapper">
+    
+    <!-- 基础结果映射 -->
+    <resultMap id="BaseResultMap" type="com.github.starter.dbmonitor.entity.MonitorConfig">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="config_name" property="configName" jdbcType="VARCHAR"/>
+        <result column="data_source_name" property="dataSourceName" jdbcType="VARCHAR"/>
+        <result column="table_name" property="tableName" jdbcType="VARCHAR"/>
+        <result column="time_column_name" property="timeColumnName" jdbcType="VARCHAR"/>
+        <result column="time_column_type" property="timeColumnType" jdbcType="VARCHAR"/>
+        <result column="enabled" property="enabled" jdbcType="BOOLEAN"/>
+        <result column="interval_type" property="intervalType" jdbcType="VARCHAR"/>
+        <result column="interval_value" property="intervalValue" jdbcType="INTEGER"/>
+        <result column="description" property="description" jdbcType="LONGVARCHAR"/>
+        <result column="created_time" property="createdTime" jdbcType="TIMESTAMP"/>
+        <result column="updated_time" property="updatedTime" jdbcType="TIMESTAMP"/>
+        <result column="created_by" property="createdBy" jdbcType="VARCHAR"/>
+        <result column="updated_by" property="updatedBy" jdbcType="VARCHAR"/>
+        <result column="extend_config" property="extendConfig" jdbcType="LONGVARCHAR"/>
+    </resultMap>
+    
+    <!-- 基础列定义 -->
+    <sql id="Base_Column_List">
+        id, config_name, data_source_name, table_name, time_column_name, time_column_type, 
+        enabled, interval_type, interval_value, description, created_time, updated_time, 
+        created_by, updated_by, extend_config
+    </sql>
+    
+    <!-- 创建监控配置表 -->
+    <update id="createTableIfNotExists">
+        CREATE TABLE IF NOT EXISTS monitor_config (
+            id BIGINT PRIMARY KEY AUTO_INCREMENT,
+            config_name VARCHAR(255) NOT NULL UNIQUE,
+            data_source_name VARCHAR(255) NOT NULL,
+            table_name VARCHAR(255) NOT NULL,
+            time_column_name VARCHAR(255) NOT NULL,
+            time_column_type VARCHAR(50) NOT NULL DEFAULT 'DATETIME',
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            interval_type VARCHAR(50) NOT NULL DEFAULT 'MINUTES',
+            interval_value INT NOT NULL DEFAULT 10,
+            description TEXT,
+            created_time DATETIME NOT NULL,
+            updated_time DATETIME NOT NULL,
+            created_by VARCHAR(255),
+            updated_by VARCHAR(255),
+            extend_config TEXT,
+            INDEX idx_data_source_table (data_source_name, table_name),
+            INDEX idx_enabled (enabled),
+            INDEX idx_created_time (created_time)
+        )
+    </update>
+    
+    <!-- 插入监控配置 -->
+    <insert id="insert" parameterType="com.github.starter.dbmonitor.entity.MonitorConfig" 
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO monitor_config (
+            config_name, data_source_name, table_name, time_column_name, 
+            time_column_type, enabled, interval_type, interval_value, 
+            description, created_time, updated_time, created_by, updated_by, extend_config
+        )
+        VALUES (
+            #{configName}, #{dataSourceName}, #{tableName}, #{timeColumnName}, 
+            #{timeColumnType}, #{enabled}, #{intervalType}, #{intervalValue}, 
+            #{description}, #{createdTime}, #{updatedTime}, #{createdBy}, #{updatedBy}, #{extendConfig}
+        )
+    </insert>
+    
+    <!-- 更新监控配置 -->
+    <update id="update" parameterType="com.github.starter.dbmonitor.entity.MonitorConfig">
+        UPDATE monitor_config SET 
+            config_name = #{configName}, 
+            data_source_name = #{dataSourceName}, 
+            table_name = #{tableName}, 
+            time_column_name = #{timeColumnName}, 
+            time_column_type = #{timeColumnType}, 
+            enabled = #{enabled}, 
+            interval_type = #{intervalType}, 
+            interval_value = #{intervalValue}, 
+            description = #{description}, 
+            updated_time = #{updatedTime}, 
+            updated_by = #{updatedBy}, 
+            extend_config = #{extendConfig}
+        WHERE id = #{id}
+    </update>
+    
+    <!-- 根据ID查找监控配置 -->
+    <select id="findById" parameterType="java.lang.Long" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM monitor_config
+        WHERE id = #{id}
+    </select>
+    
+    <!-- 根据配置名称查找监控配置 -->
+    <select id="findByConfigName" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM monitor_config
+        WHERE config_name = #{configName}
+    </select>
+    
+    <!-- 查找所有监控配置 -->
+    <select id="findAll" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM monitor_config
+        ORDER BY created_time DESC
+    </select>
+    
+    <!-- 查找启用的监控配置 -->
+    <select id="findAllEnabled" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM monitor_config
+        WHERE enabled = TRUE
+        ORDER BY created_time DESC
+    </select>
+    
+    <!-- 根据数据源查找监控配置 -->
+    <select id="findByDataSourceName" parameterType="java.lang.String" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM monitor_config
+        WHERE data_source_name = #{dataSourceName}
+        ORDER BY created_time DESC
+    </select>
+    
+    <!-- 根据数据源和表名查找监控配置 -->
+    <select id="findByDataSourceNameAndTableName" resultMap="BaseResultMap">
+        SELECT 
+        <include refid="Base_Column_List"/>
+        FROM monitor_config
+        WHERE data_source_name = #{dataSourceName}
+        AND table_name = #{tableName}
+    </select>
+    
+    <!-- 根据ID删除监控配置 -->
+    <delete id="deleteById" parameterType="java.lang.Long">
+        DELETE FROM monitor_config WHERE id = #{id}
+    </delete>
+    
+    <!-- 启用或禁用监控配置 -->
+    <update id="updateEnabled">
+        UPDATE monitor_config SET 
+            enabled = #{enabled}, 
+            updated_time = #{updatedTime}, 
+            updated_by = #{updatedBy}
+        WHERE id = #{id}
+    </update>
+    
+    <!-- 批量启用或禁用监控配置 -->
+    <update id="batchUpdateEnabled">
+        UPDATE monitor_config SET 
+            enabled = #{enabled}, 
+            updated_time = #{updatedTime}, 
+            updated_by = #{updatedBy}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+    </update>
+    
+    <!-- 获取表的所有列信息 -->
+    <select id="getTableColumns" parameterType="java.lang.String" resultType="java.lang.String">
+        SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = #{tableName} 
+        ORDER BY ORDINAL_POSITION
+    </select>
+    
+    <!-- 自动检测表的时间字段 -->
+    <select id="detectTimeColumns" parameterType="java.lang.String" resultType="java.lang.String">
+        SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = #{tableName} 
+        AND (DATA_TYPE IN ('datetime', 'timestamp', 'date') 
+        OR COLUMN_NAME LIKE '%time%' OR COLUMN_NAME LIKE '%date%' 
+        OR COLUMN_NAME LIKE '%created%' OR COLUMN_NAME LIKE '%updated%') 
+        ORDER BY ORDINAL_POSITION
+    </select>
+    
+    <!-- 检查表是否存在 -->
+    <select id="checkTableExists" parameterType="java.lang.String" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES 
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = #{tableName}
+    </select>
+    
+    <!-- 检查字段是否存在 -->
+    <select id="checkColumnExists" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = #{tableName} AND COLUMN_NAME = #{columnName}
+    </select>
+</mapper>

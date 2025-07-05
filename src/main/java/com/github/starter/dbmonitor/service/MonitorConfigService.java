@@ -1,10 +1,10 @@
 package com.github.starter.dbmonitor.service;
 
 import com.github.starter.dbmonitor.entity.MonitorConfig;
+import com.github.starter.dbmonitor.mapper.MonitorConfigMapper;
 import com.github.starter.dbmonitor.repository.MonitorConfigRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -28,7 +28,7 @@ public class MonitorConfigService {
     private DataSourceService dataSourceService;
     
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private MonitorConfigMapper monitorConfigMapper;
     
     /**
      * 初始化监控配置表
@@ -197,10 +197,7 @@ public class MonitorConfigService {
      */
     public List<String> getTableColumns(String dataSourceName, String tableName) {
         try {
-            String sql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
-                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION";
-            
-            return jdbcTemplate.queryForList(sql, String.class, tableName);
+            return monitorConfigMapper.getTableColumns(tableName);
         } catch (Exception e) {
             log.error("获取表 {} 的列信息失败: {}", tableName, e.getMessage());
             throw new RuntimeException("获取表列信息失败", e);
@@ -212,14 +209,7 @@ public class MonitorConfigService {
      */
     public List<String> detectTimeColumns(String dataSourceName, String tableName) {
         try {
-            String sql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " +
-                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? " +
-                    "AND (DATA_TYPE IN ('datetime', 'timestamp', 'date') " +
-                    "OR COLUMN_NAME LIKE '%time%' OR COLUMN_NAME LIKE '%date%' " +
-                    "OR COLUMN_NAME LIKE '%created%' OR COLUMN_NAME LIKE '%updated%') " +
-                    "ORDER BY ORDINAL_POSITION";
-            
-            return jdbcTemplate.queryForList(sql, String.class, tableName);
+            return monitorConfigMapper.detectTimeColumns(tableName);
         } catch (Exception e) {
             log.error("自动检测表 {} 的时间字段失败: {}", tableName, e.getMessage());
             throw new RuntimeException("自动检测时间字段失败", e);
@@ -276,20 +266,13 @@ public class MonitorConfigService {
     private void validateTableAndTimeColumn(MonitorConfig config) {
         try {
             // 检查表是否存在
-            String checkTableSql = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES " +
-                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?";
-            
-            Integer tableCount = jdbcTemplate.queryForObject(checkTableSql, Integer.class, config.getTableName());
+            Integer tableCount = monitorConfigMapper.checkTableExists(config.getTableName());
             if (tableCount == null || tableCount == 0) {
                 throw new IllegalArgumentException("表不存在: " + config.getTableName());
             }
             
             // 检查时间字段是否存在
-            String checkColumnSql = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS " +
-                    "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?";
-            
-            Integer columnCount = jdbcTemplate.queryForObject(checkColumnSql, Integer.class, 
-                    config.getTableName(), config.getTimeColumnName());
+            Integer columnCount = monitorConfigMapper.checkColumnExists(config.getTableName(), config.getTimeColumnName());
             if (columnCount == null || columnCount == 0) {
                 throw new IllegalArgumentException("时间字段不存在: " + config.getTimeColumnName());
             }

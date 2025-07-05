@@ -1,7 +1,8 @@
 package com.github.starter.dbmonitor.service;
 
+import com.github.starter.dbmonitor.mapper.TableOperationMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -18,10 +19,13 @@ import java.util.regex.Pattern;
 @Slf4j
 public class TablePatternService {
     
+    @Autowired
+    private TableOperationMapper tableOperationMapper;
+    
     /**
      * 根据模式匹配表名
      */
-    public List<String> getMatchedTableNames(JdbcTemplate jdbcTemplate, List<String> tablePatterns) {
+    public List<String> getMatchedTableNames(List<String> tablePatterns) {
         if (CollectionUtils.isEmpty(tablePatterns)) {
             log.warn("没有配置需要监控的表名模式");
             return new ArrayList<>();
@@ -29,7 +33,7 @@ public class TablePatternService {
         
         try {
             // 获取数据库中所有表名
-            List<String> allTableNames = getAllTableNames(jdbcTemplate);
+            List<String> allTableNames = getAllTableNames();
             
             // 匹配表名
             Set<String> matchedTableNames = new HashSet<>();
@@ -53,20 +57,17 @@ public class TablePatternService {
     /**
      * 获取数据库中所有表名
      */
-    private List<String> getAllTableNames(JdbcTemplate jdbcTemplate) {
+    private List<String> getAllTableNames() {
         try {
             // 尝试使用标准的 INFORMATION_SCHEMA 查询
-            String sql = "SELECT table_name FROM information_schema.tables " +
-                        "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'";
-            
             try {
-                return jdbcTemplate.queryForList(sql, String.class);
+                return tableOperationMapper.getAllTableNames();
             } catch (Exception e) {
                 log.debug("使用 INFORMATION_SCHEMA 查询失败，尝试使用 SHOW TABLES: {}", e.getMessage());
             }
             
             // 如果上面的查询失败，尝试使用 SHOW TABLES
-            return jdbcTemplate.queryForList("SHOW TABLES", String.class);
+            return tableOperationMapper.getTableNamesByShow();
             
         } catch (Exception e) {
             log.error("获取数据库表名失败: {}", e.getMessage(), e);
@@ -141,12 +142,9 @@ public class TablePatternService {
     /**
      * 验证表名是否存在
      */
-    public boolean isTableExists(JdbcTemplate jdbcTemplate, String tableName) {
+    public boolean isTableExists(String tableName) {
         try {
-            String sql = "SELECT COUNT(*) FROM information_schema.tables " +
-                        "WHERE table_schema = DATABASE() AND table_name = ?";
-            
-            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tableName);
+            Integer count = tableOperationMapper.checkTableExists(tableName);
             return count != null && count > 0;
             
         } catch (Exception e) {
@@ -154,7 +152,7 @@ public class TablePatternService {
             
             // 如果上面的查询失败，尝试直接查询表
             try {
-                jdbcTemplate.queryForObject("SELECT 1 FROM " + tableName + " LIMIT 1", Integer.class);
+                tableOperationMapper.checkTableExistsByQuery(tableName);
                 return true;
             } catch (Exception ex) {
                 return false;
@@ -165,13 +163,9 @@ public class TablePatternService {
     /**
      * 获取表的列信息
      */
-    public List<String> getTableColumns(JdbcTemplate jdbcTemplate, String tableName) {
+    public List<String> getTableColumns(String tableName) {
         try {
-            String sql = "SELECT column_name FROM information_schema.columns " +
-                        "WHERE table_schema = DATABASE() AND table_name = ?";
-            
-            return jdbcTemplate.queryForList(sql, String.class, tableName);
-            
+            return tableOperationMapper.getTableColumns(tableName);
         } catch (Exception e) {
             log.error("获取表 {} 的列信息失败: {}", tableName, e.getMessage(), e);
             return new ArrayList<>();
