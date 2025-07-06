@@ -21,6 +21,9 @@ public class TablePatternService {
     
     @Autowired
     private TableOperationMapper tableOperationMapper;
+
+    @Autowired
+    private DatabaseSecurityService databaseSecurityService;
     
     /**
      * 根据模式匹配表名

@@ -58,6 +58,7 @@ public class MonitorConfigRepository {
             MonitorConfig config = monitorConfigMapper.findById(id);
             return Optional.ofNullable(config);
         } catch (Exception e) {
+            log.error("根据ID查找监控配置失败, ID: {}, 错误: {}", id, e.getMessage(), e);
             return Optional.empty();
         }
     }
@@ -70,6 +71,7 @@ public class MonitorConfigRepository {
             MonitorConfig config = monitorConfigMapper.findByConfigName(configName);
             return Optional.ofNullable(config);
         } catch (Exception e) {
+            log.error("根据配置名称查找监控配置失败, 配置名称: {}, 错误: {}", configName, e.getMessage(), e);
             return Optional.empty();
         }
     }
@@ -103,6 +105,8 @@ public class MonitorConfigRepository {
             MonitorConfig config = monitorConfigMapper.findByDataSourceNameAndTableName(dataSourceName, tableName);
             return Optional.ofNullable(config);
         } catch (Exception e) {
+            log.error("根据数据源和表名查找监控配置失败, 数据源: {}, 表名: {}, 错误: {}",
+                    dataSourceName, tableName, e.getMessage(), e);
             return Optional.empty();
         }
     }

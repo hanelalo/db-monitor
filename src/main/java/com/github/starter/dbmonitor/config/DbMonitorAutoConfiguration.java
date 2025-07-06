@@ -28,7 +28,7 @@ import javax.annotation.PreDestroy;
 @Configuration
 @EnableConfigurationProperties(DbMonitorProperties.class)
 @ComponentScan(basePackages = "com.github.starter.dbmonitor")
-@MapperScan("com.github.starter.dbmonitor.repository")
+@MapperScan("com.github.starter.dbmonitor.mapper")
 @EnableScheduling
 @ConditionalOnProperty(prefix = "db.monitor", name = "enabled", havingValue = "true", matchIfMissing = true)
 @Slf4j
@@ -88,8 +88,12 @@ public class DbMonitorAutoConfiguration {
     @PreDestroy
     public void destroyXxlJobExecutor() {
         if (xxlJobExecutor != null) {
-            xxlJobExecutor.destroy();
-            log.info("XXL-Job 执行器已销毁");
+            try {
+                xxlJobExecutor.destroy();
+                log.info("XXL-Job 执行器已销毁");
+            } catch (Exception e) {
+                log.error("销毁 XXL-Job 执行器时发生错误: {}", e.getMessage(), e);
+            }
         }
     }
     

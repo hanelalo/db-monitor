@@ -29,6 +29,9 @@ public class MonitorConfigService {
     
     @Autowired
     private MonitorConfigMapper monitorConfigMapper;
+
+    @Autowired
+    private DatabaseSecurityService databaseSecurityService;
     
     /**
      * 初始化监控配置表
@@ -196,11 +199,15 @@ public class MonitorConfigService {
      * 获取表的所有列信息
      */
     public List<String> getTableColumns(String dataSourceName, String tableName) {
+        // 安全验证
+        databaseSecurityService.sanitizeDataSourceName(dataSourceName);
+        databaseSecurityService.sanitizeTableName(tableName);
+
         try {
             return monitorConfigMapper.getTableColumns(tableName);
         } catch (Exception e) {
-            log.error("获取表 {} 的列信息失败: {}", tableName, e.getMessage());
-            throw new RuntimeException("获取表列信息失败", e);
+            log.error("获取表 {} 的列信息失败: {}", tableName, e.getMessage(), e);
+            throw new RuntimeException("获取表列信息失败: " + e.getMessage(), e);
         }
     }
     
@@ -208,11 +215,15 @@ public class MonitorConfigService {
      * 自动检测表的时间字段
      */
     public List<String> detectTimeColumns(String dataSourceName, String tableName) {
+        // 安全验证
+        databaseSecurityService.sanitizeDataSourceName(dataSourceName);
+        databaseSecurityService.sanitizeTableName(tableName);
+
         try {
             return monitorConfigMapper.detectTimeColumns(tableName);
         } catch (Exception e) {
-            log.error("自动检测表 {} 的时间字段失败: {}", tableName, e.getMessage());
-            throw new RuntimeException("自动检测时间字段失败", e);
+            log.error("自动检测表 {} 的时间字段失败: {}", tableName, e.getMessage(), e);
+            throw new RuntimeException("自动检测时间字段失败: " + e.getMessage(), e);
         }
     }
     
@@ -265,22 +276,30 @@ public class MonitorConfigService {
      */
     private void validateTableAndTimeColumn(MonitorConfig config) {
         try {
+            // 安全验证
+            databaseSecurityService.sanitizeDataSourceName(config.getDataSourceName());
+            databaseSecurityService.sanitizeTableName(config.getTableName());
+            databaseSecurityService.sanitizeColumnName(config.getTimeColumnName());
+
             // 检查表是否存在
             Integer tableCount = monitorConfigMapper.checkTableExists(config.getTableName());
             if (tableCount == null || tableCount == 0) {
                 throw new IllegalArgumentException("表不存在: " + config.getTableName());
             }
-            
+
             // 检查时间字段是否存在
             Integer columnCount = monitorConfigMapper.checkColumnExists(config.getTableName(), config.getTimeColumnName());
             if (columnCount == null || columnCount == 0) {
                 throw new IllegalArgumentException("时间字段不存在: " + config.getTimeColumnName());
             }
-            
+
             log.debug("验证表 {} 和时间字段 {} 成功", config.getTableName(), config.getTimeColumnName());
-            
+
+        } catch (IllegalArgumentException e) {
+            // 重新抛出参数异常
+            throw e;
         } catch (Exception e) {
-            log.error("验证表和时间字段失败: {}", e.getMessage());
+            log.error("验证表和时间字段失败: {}", e.getMessage(), e);
             throw new RuntimeException("验证表和时间字段失败: " + e.getMessage(), e);
         }
     }

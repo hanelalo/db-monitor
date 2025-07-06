@@ -42,38 +42,54 @@ public class DbMonitorService {
     
     @Autowired
     private TableOperationMapper tableOperationMapper;
+
+    @Autowired
+    private DatabaseSecurityService databaseSecurityService;
     
     /**
      * 执行数据库监控任务
      */
-    @Transactional
     public void executeMonitoring() {
         log.info("开始执行数据库监控任务");
-        
+
         try {
             // 获取所有启用的监控配置
             List<MonitorConfig> enabledConfigs = monitorConfigService.getEnabledConfigs();
-            
+
             if (enabledConfigs.isEmpty()) {
                 log.info("没有启用的监控配置，跳过监控任务");
                 return;
             }
-            
-            // 遍历每个监控配置进行监控
+
+            int successCount = 0;
+            int failureCount = 0;
+
+            // 遍历每个监控配置进行监控，每个配置使用独立事务
             for (MonitorConfig config : enabledConfigs) {
                 try {
-                    monitorTableWithConfig(config);
+                    monitorTableWithConfigInTransaction(config);
+                    successCount++;
                 } catch (Exception e) {
+                    failureCount++;
                     log.error("监控配置 {} 执行失败: {}", config.getConfigName(), e.getMessage(), e);
                 }
             }
-            
-            log.info("数据库监控任务执行完成，共监控了 {} 个配置", enabledConfigs.size());
-            
+
+            log.info("数据库监控任务执行完成，成功: {}, 失败: {}, 总计: {}",
+                    successCount, failureCount, enabledConfigs.size());
+
         } catch (Exception e) {
             log.error("执行数据库监控任务时发生错误: {}", e.getMessage(), e);
             throw new RuntimeException("监控任务执行失败", e);
         }
+    }
+
+    /**
+     * 在独立事务中监控单个配置
+     */
+    @Transactional
+    public void monitorTableWithConfigInTransaction(MonitorConfig config) {
+        monitorTableWithConfig(config);
     }
     
     /**

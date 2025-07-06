@@ -2,6 +2,7 @@ package com.github.starter.dbmonitor.controller;
 
 import com.github.starter.dbmonitor.entity.MonitorConfig;
 import com.github.starter.dbmonitor.service.MonitorConfigService;
+import com.github.starter.dbmonitor.service.DatabaseSecurityService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,9 @@ public class MonitorConfigController {
     
     @Autowired
     private MonitorConfigService monitorConfigService;
+
+    @Autowired
+    private DatabaseSecurityService databaseSecurityService;
     
     /**
      * 创建监控配置
@@ -249,19 +253,28 @@ public class MonitorConfigController {
             @RequestParam String dataSourceName,
             @RequestParam String tableName) {
         Map<String, Object> response = new HashMap<>();
-        
+
         try {
+            // 参数验证
+            databaseSecurityService.sanitizeDataSourceName(dataSourceName);
+            databaseSecurityService.sanitizeTableName(tableName);
+
             List<String> columns = monitorConfigService.getTableColumns(dataSourceName, tableName);
-            
+
             response.put("success", true);
             response.put("data", columns);
             response.put("total", columns.size());
             return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("参数验证失败: {}", e.getMessage());
+            response.put("success", false);
+            response.put("message", "参数验证失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         } catch (Exception e) {
             log.error("获取表列信息失败: {}", e.getMessage(), e);
             response.put("success", false);
             response.put("message", "获取表列信息失败: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
     
@@ -273,20 +286,29 @@ public class MonitorConfigController {
             @RequestParam String dataSourceName,
             @RequestParam String tableName) {
         Map<String, Object> response = new HashMap<>();
-        
+
         try {
+            // 参数验证
+            databaseSecurityService.sanitizeDataSourceName(dataSourceName);
+            databaseSecurityService.sanitizeTableName(tableName);
+
             List<String> timeColumns = monitorConfigService.detectTimeColumns(dataSourceName, tableName);
-            
+
             response.put("success", true);
             response.put("data", timeColumns);
             response.put("total", timeColumns.size());
             response.put("message", timeColumns.isEmpty() ? "未检测到时间字段" : "检测到 " + timeColumns.size() + " 个时间字段");
             return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            log.warn("参数验证失败: {}", e.getMessage());
+            response.put("success", false);
+            response.put("message", "参数验证失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         } catch (Exception e) {
             log.error("自动检测时间字段失败: {}", e.getMessage(), e);
             response.put("success", false);
             response.put("message", "自动检测时间字段失败: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
     

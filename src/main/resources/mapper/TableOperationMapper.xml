@@ -20,8 +20,9 @@
         WHERE table_schema = DATABASE() AND table_name = #{tableName}
     </select>
     
-    <!-- 检查表是否存在(通过查询) -->
+    <!-- 检查表是否存在(通过查询) - 注意：此方法已弃用，建议使用checkTableExists -->
     <select id="checkTableExistsByQuery" parameterType="java.lang.String" resultType="java.lang.Integer">
+        <!-- 此查询存在SQL注入风险，仅在表名已经过安全验证后使用 -->
         SELECT 1 FROM ${tableName} LIMIT 1
     </select>
     
@@ -31,9 +32,10 @@
         WHERE table_schema = DATABASE() AND table_name = #{tableName}
     </select>
     
-    <!-- 查询表的增量数据 -->
+    <!-- 查询表的增量数据 - 注意：此方法存在SQL注入风险，仅在参数已经过安全验证后使用 -->
     <select id="queryTableIncrement" resultType="java.lang.Long">
-        SELECT COUNT(*) FROM ${tableName} 
+        <!-- 表名和列名使用字符串替换，存在SQL注入风险，必须在应用层进行安全验证 -->
+        SELECT COUNT(*) FROM ${tableName}
         WHERE ${timeColumn} >= #{startTime} AND ${timeColumn} &lt; #{endTime}
     </select>
     
