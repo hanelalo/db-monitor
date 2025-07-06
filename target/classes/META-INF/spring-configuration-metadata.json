@@ -8,26 +8,22 @@
     {
       "name": "db.monitor.metrics",
       "type": "com.github.starter.dbmonitor.config.DbMonitorProperties$Metrics",
-      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties",
-      "sourceMethod": "public com.github.starter.dbmonitor.config.DbMonitorProperties.Metrics getMetrics() "
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties"
     },
     {
       "name": "db.monitor.monitor-table",
       "type": "com.github.starter.dbmonitor.config.DbMonitorProperties$MonitorTable",
-      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties",
-      "sourceMethod": "public com.github.starter.dbmonitor.config.DbMonitorProperties.MonitorTable getMonitorTable() "
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties"
     },
     {
       "name": "db.monitor.time-interval",
       "type": "com.github.starter.dbmonitor.config.DbMonitorProperties$TimeInterval",
-      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties",
-      "sourceMethod": "public com.github.starter.dbmonitor.config.DbMonitorProperties.TimeInterval getTimeInterval() "
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties"
     },
     {
       "name": "db.monitor.xxl-job",
       "type": "com.github.starter.dbmonitor.config.DbMonitorProperties$XxlJobConfig",
-      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties",
-      "sourceMethod": "public com.github.starter.dbmonitor.config.DbMonitorProperties.XxlJobConfig getXxlJob() "
+      "sourceType": "com.github.starter.dbmonitor.config.DbMonitorProperties"
     }
   ],
   "properties": [

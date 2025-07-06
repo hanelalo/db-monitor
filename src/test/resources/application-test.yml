@@ -1,0 +1,48 @@
+# 测试环境配置
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+    
+  h2:
+    console:
+      enabled: true
+      
+# MyBatis配置
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.github.starter.dbmonitor.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# 数据库监控配置
+db:
+  monitor:
+    enabled: true
+    data-source-name: primary
+    table-names:
+      - test_table
+      - user_table
+    time-interval:
+      type: MINUTES
+      value: 10
+    xxl-job:
+      enabled: false
+    monitor-table:
+      table-name: db_monitor_statistics
+      auto-create: true
+      retention-days: 30
+    metrics:
+      enabled: true
+      prefix: db_monitor
+      endpoint: /metrics
+
+# 日志配置
+logging:
+  level:
+    com.github.starter.dbmonitor: DEBUG
+    org.apache.ibatis: DEBUG
+    org.springframework.jdbc: DEBUG
