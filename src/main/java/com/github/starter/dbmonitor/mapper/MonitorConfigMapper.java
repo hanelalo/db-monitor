@@ -91,9 +91,9 @@ public interface MonitorConfigMapper {
      * 检查表是否存在
      */
     Integer checkTableExists(@Param("tableName") String tableName);
-    
+
     /**
-     * 检查字段是否存在
+     * 检查列是否存在
      */
     Integer checkColumnExists(@Param("tableName") String tableName, @Param("columnName") String columnName);
 }
