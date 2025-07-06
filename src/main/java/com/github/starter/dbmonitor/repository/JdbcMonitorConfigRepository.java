@@ -87,6 +87,13 @@ public class JdbcMonitorConfigRepository extends MultiDataSourceRepository {
             config.setCreatedBy(rs.getString("created_by"));
             config.setUpdatedBy(rs.getString("updated_by"));
             config.setExtendConfig(rs.getString("extend_config"));
+
+            // 处理最后统计时间（可能为null）
+            java.sql.Timestamp lastStatisticTimestamp = rs.getTimestamp("last_statistic_time");
+            if (lastStatisticTimestamp != null) {
+                config.setLastStatisticTime(lastStatisticTimestamp.toLocalDateTime());
+            }
+
             return config;
         }
     };
@@ -117,6 +124,7 @@ public class JdbcMonitorConfigRepository extends MultiDataSourceRepository {
                 "created_by VARCHAR(100), " +
                 "updated_by VARCHAR(100), " +
                 "extend_config TEXT, " +
+                "last_statistic_time TIMESTAMP NULL, " +
                 "INDEX idx_data_source_table (data_source_name, table_name), " +
                 "INDEX idx_enabled (enabled)" +
                 ")";
@@ -138,7 +146,7 @@ public class JdbcMonitorConfigRepository extends MultiDataSourceRepository {
         String sql = "INSERT INTO " + tableName +
                 " (config_name, data_source_name, table_name, time_column_name, time_column_type, " +
                 "enabled, interval_type, interval_value, description, created_time, updated_time, " +
-                "created_by, updated_by, extend_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "created_by, updated_by, extend_config, last_statistic_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
@@ -158,6 +166,7 @@ public class JdbcMonitorConfigRepository extends MultiDataSourceRepository {
             ps.setString(12, config.getCreatedBy());
             ps.setString(13, config.getUpdatedBy());
             ps.setString(14, config.getExtendConfig());
+            ps.setObject(15, config.getLastStatisticTime());
             return ps;
         }, keyHolder);
         
@@ -266,6 +275,16 @@ public class JdbcMonitorConfigRepository extends MultiDataSourceRepository {
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * 更新监控配置的最后统计时间
+     */
+    public boolean updateLastStatisticTime(Long configId, LocalDateTime lastStatisticTime) {
+        String tableName = getTableName();
+        String sql = "UPDATE " + tableName + " SET last_statistic_time = ?, updated_time = ? WHERE id = ?";
+        int rows = getConfigJdbcTemplate().update(sql, lastStatisticTime, LocalDateTime.now(), configId);
+        return rows > 0;
     }
 
     /**

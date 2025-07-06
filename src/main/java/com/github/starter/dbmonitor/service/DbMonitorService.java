@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -91,45 +92,80 @@ public class DbMonitorService {
     }
     
     /**
-     * 使用监控配置监控单个表
+     * 使用监控配置监控单个表（支持断点续传）
      */
     private void monitorTableWithConfig(MonitorConfig config) {
         try {
-            // 计算时间范围
-            LocalDateTime endTime = LocalDateTime.now();
-            LocalDateTime startTime = calculateStartTime(endTime, config);
-            
-            // 使用配置的时间字段查询增量数据
-            Long incrementCount = queryTableIncrementWithConfig(config, startTime, endTime);
-            
-            // 估算增量数据的磁盘空间使用量
-            DiskSpaceEstimationService.DiskSpaceEstimation diskSpaceEstimation = 
-                diskSpaceEstimationService.estimateIncrementalDiskSpace(config.getTableName(), incrementCount);
-            
-            // 创建统计记录
-            DbMonitorStatistics statistics = new DbMonitorStatistics(
-                config.getDataSourceName(),
-                config.getTableName(),
-                startTime,
-                endTime,
-                incrementCount,
-                diskSpaceEstimation.getTotalEstimatedSize(),
-                diskSpaceEstimation.getAvgRowSize(),
-                config.getIntervalType(),
-                config.getIntervalValue()
-            );
-            
-            // 设置创建时间
-            statistics.setCreatedTime(LocalDateTime.now());
-            
-            // 保存统计记录
-            statisticsRepository.insert(statistics);
-            
-            log.info("监控配置 {} - 表 {} 在时间范围 {} 到 {} 的增量数据为: {} 行，估计磁盘空间: {} 字节 ({})", 
-                    config.getConfigName(), config.getTableName(), startTime, endTime, incrementCount, 
-                    diskSpaceEstimation.getTotalEstimatedSize(), 
-                    formatBytes(diskSpaceEstimation.getTotalEstimatedSize()));
-            
+            LocalDateTime currentTime = LocalDateTime.now();
+
+            // 计算需要统计的时间段列表（支持断点续传）
+            List<TimeRange> timeRanges = calculateTimeRanges(config, currentTime);
+
+            if (timeRanges.isEmpty()) {
+                log.debug("监控配置 {} - 表 {} 无需统计新数据", config.getConfigName(), config.getTableName());
+                return;
+            }
+
+            log.info("监控配置 {} - 表 {} 需要统计 {} 个时间段",
+                    config.getConfigName(), config.getTableName(), timeRanges.size());
+
+            LocalDateTime lastEndTime = null;
+            long totalIncrementCount = 0;
+            long totalEstimatedSize = 0;
+
+            // 逐个时间段进行统计
+            for (TimeRange timeRange : timeRanges) {
+                try {
+                    // 使用配置的时间字段查询增量数据
+                    Long incrementCount = queryTableIncrementWithConfig(config, timeRange.getStartTime(), timeRange.getEndTime());
+
+                    // 估算增量数据的磁盘空间使用量
+                    DiskSpaceEstimationService.DiskSpaceEstimation diskSpaceEstimation =
+                        diskSpaceEstimationService.estimateIncrementalDiskSpace(config.getTableName(), incrementCount);
+
+                    // 创建统计记录
+                    DbMonitorStatistics statistics = new DbMonitorStatistics(
+                        config.getDataSourceName(),
+                        config.getTableName(),
+                        timeRange.getStartTime(),
+                        timeRange.getEndTime(),
+                        incrementCount,
+                        diskSpaceEstimation.getTotalEstimatedSize(),
+                        diskSpaceEstimation.getAvgRowSize(),
+                        config.getIntervalType(),
+                        config.getIntervalValue()
+                    );
+
+                    // 设置创建时间
+                    statistics.setCreatedTime(LocalDateTime.now());
+
+                    // 保存统计记录
+                    statisticsRepository.insert(statistics);
+
+                    totalIncrementCount += incrementCount;
+                    totalEstimatedSize += diskSpaceEstimation.getTotalEstimatedSize();
+                    lastEndTime = timeRange.getEndTime();
+
+                    log.debug("监控配置 {} - 表 {} 时间段 {} 到 {} 的增量数据: {} 行",
+                            config.getConfigName(), config.getTableName(),
+                            timeRange.getStartTime(), timeRange.getEndTime(), incrementCount);
+
+                } catch (Exception e) {
+                    log.error("监控配置 {} - 表 {} 时间段 {} 到 {} 统计失败: {}",
+                            config.getConfigName(), config.getTableName(),
+                            timeRange.getStartTime(), timeRange.getEndTime(), e.getMessage(), e);
+                    // 继续处理下一个时间段
+                }
+            }
+
+            // 更新配置的最后统计时间
+            if (lastEndTime != null) {
+                monitorConfigService.updateLastStatisticTime(config.getId(), lastEndTime);
+                log.info("监控配置 {} - 表 {} 完成统计，总计 {} 行，估计磁盘空间: {} ({})",
+                        config.getConfigName(), config.getTableName(), totalIncrementCount,
+                        formatBytes(totalEstimatedSize), totalEstimatedSize);
+            }
+
         } catch (Exception e) {
             log.error("监控配置 {} 执行失败: {}", config.getConfigName(), e.getMessage(), e);
             throw e;
@@ -260,6 +296,95 @@ public class DbMonitorService {
             return String.format("%.2f MB", bytes / (1024.0 * 1024.0));
         } else {
             return String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
+        }
+    }
+
+    /**
+     * 计算需要统计的时间段列表（支持断点续传）
+     */
+    private List<TimeRange> calculateTimeRanges(MonitorConfig config, LocalDateTime currentTime) {
+        List<TimeRange> timeRanges = new ArrayList<>();
+
+        // 获取上次统计的结束时间
+        LocalDateTime lastStatisticTime = config.getLastStatisticTime();
+
+        // 如果是第一次统计，从当前时间往前推一个间隔作为起始时间
+        if (lastStatisticTime == null) {
+            LocalDateTime startTime = calculateStartTime(currentTime, config);
+            timeRanges.add(new TimeRange(startTime, currentTime));
+            log.info("监控配置 {} - 表 {} 首次统计，时间范围: {} 到 {}",
+                    config.getConfigName(), config.getTableName(), startTime, currentTime);
+            return timeRanges;
+        }
+
+        // 计算间隔时长（分钟）
+        long intervalMinutes = getIntervalMinutes(config);
+
+        // 从上次统计结束时间开始，按间隔切分到当前时间
+        LocalDateTime segmentStart = lastStatisticTime;
+
+        while (segmentStart.isBefore(currentTime)) {
+            LocalDateTime segmentEnd = segmentStart.plusMinutes(intervalMinutes);
+
+            // 最后一个段不能超过当前时间
+            if (segmentEnd.isAfter(currentTime)) {
+                segmentEnd = currentTime;
+            }
+
+            // 只有当段的开始时间小于结束时间时才添加
+            if (segmentStart.isBefore(segmentEnd)) {
+                timeRanges.add(new TimeRange(segmentStart, segmentEnd));
+            }
+
+            segmentStart = segmentEnd;
+        }
+
+        if (!timeRanges.isEmpty()) {
+            log.info("监控配置 {} - 表 {} 断点续传，从 {} 开始统计到 {}，共 {} 个时间段",
+                    config.getConfigName(), config.getTableName(),
+                    lastStatisticTime, currentTime, timeRanges.size());
+        }
+
+        return timeRanges;
+    }
+
+    /**
+     * 获取间隔时长（分钟）
+     */
+    private long getIntervalMinutes(MonitorConfig config) {
+        String type = config.getIntervalType();
+        int value = config.getIntervalValue();
+
+        switch (type.toUpperCase()) {
+            case "MINUTES":
+                return value;
+            case "HOURS":
+                return value * 60L;
+            case "DAYS":
+                return value * 24L * 60L;
+            default:
+                return value; // 默认按分钟
+        }
+    }
+
+    /**
+     * 时间范围内部类
+     */
+    private static class TimeRange {
+        private final LocalDateTime startTime;
+        private final LocalDateTime endTime;
+
+        public TimeRange(LocalDateTime startTime, LocalDateTime endTime) {
+            this.startTime = startTime;
+            this.endTime = endTime;
+        }
+
+        public LocalDateTime getStartTime() {
+            return startTime;
+        }
+
+        public LocalDateTime getEndTime() {
+            return endTime;
         }
     }
 }

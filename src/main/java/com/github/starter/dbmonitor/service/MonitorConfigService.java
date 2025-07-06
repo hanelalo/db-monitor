@@ -233,6 +233,14 @@ public class MonitorConfigService {
     public Optional<MonitorConfig> getConfigByDataSourceAndTable(String dataSourceName, String tableName) {
         return monitorConfigRepository.findByDataSourceNameAndTableName(dataSourceName, tableName);
     }
+
+    /**
+     * 更新监控配置的最后统计时间
+     */
+    @Transactional
+    public boolean updateLastStatisticTime(Long configId, LocalDateTime lastStatisticTime) {
+        return monitorConfigRepository.updateLastStatisticTime(configId, lastStatisticTime);
+    }
     
     /**
      * 验证监控配置

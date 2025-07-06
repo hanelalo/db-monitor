@@ -88,6 +88,11 @@ public class MonitorConfig {
      * 扩展配置（JSON格式）
      */
     private String extendConfig;
+
+    /**
+     * 最后统计时间（用于断点续传）
+     */
+    private LocalDateTime lastStatisticTime;
     
     /**
      * 构造函数
