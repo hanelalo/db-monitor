@@ -1,6 +1,6 @@
 package com.github.starter.dbmonitor.service;
 
-import com.github.starter.dbmonitor.mapper.TableOperationMapper;
+import com.github.starter.dbmonitor.repository.JdbcTableOperationRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 public class TablePatternService {
     
     @Autowired
-    private TableOperationMapper tableOperationMapper;
+    private JdbcTableOperationRepository tableOperationRepository;
 
     @Autowired
     private DatabaseSecurityService databaseSecurityService;
@@ -62,15 +62,8 @@ public class TablePatternService {
      */
     private List<String> getAllTableNames() {
         try {
-            // 尝试使用标准的 INFORMATION_SCHEMA 查询
-            try {
-                return tableOperationMapper.getAllTableNames();
-            } catch (Exception e) {
-                log.debug("使用 INFORMATION_SCHEMA 查询失败，尝试使用 SHOW TABLES: {}", e.getMessage());
-            }
-            
-            // 如果上面的查询失败，尝试使用 SHOW TABLES
-            return tableOperationMapper.getTableNamesByShow();
+            // 使用轻量级Repository获取表名
+            return tableOperationRepository.getAllTableNames();
             
         } catch (Exception e) {
             log.error("获取数据库表名失败: {}", e.getMessage(), e);
@@ -147,28 +140,20 @@ public class TablePatternService {
      */
     public boolean isTableExists(String tableName) {
         try {
-            Integer count = tableOperationMapper.checkTableExists(tableName);
-            return count != null && count > 0;
-            
+            return tableOperationRepository.checkTableExists(tableName);
+
         } catch (Exception e) {
             log.debug("检查表 {} 是否存在时发生错误: {}", tableName, e.getMessage());
-            
-            // 如果上面的查询失败，尝试直接查询表
-            try {
-                tableOperationMapper.checkTableExistsByQuery(tableName);
-                return true;
-            } catch (Exception ex) {
-                return false;
-            }
+            return false;
         }
     }
-    
+
     /**
      * 获取表的列信息
      */
     public List<String> getTableColumns(String tableName) {
         try {
-            return tableOperationMapper.getTableColumns(tableName);
+            return tableOperationRepository.getTableColumns(tableName);
         } catch (Exception e) {
             log.error("获取表 {} 的列信息失败: {}", tableName, e.getMessage(), e);
             return new ArrayList<>();

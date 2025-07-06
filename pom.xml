@@ -41,12 +41,8 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         
-        <!-- MyBatis Spring Boot Starter -->
-        <dependency>
-            <groupId>org.mybatis.spring.boot</groupId>
-            <artifactId>mybatis-spring-boot-starter</artifactId>
-            <version>2.2.2</version>
-        </dependency>
+        <!-- Spring Boot Starter JDBC (轻量级数据访问) -->
+        <!-- 注意：这个依赖通常已经被 spring-boot-starter-web 包含 -->
         
         <!-- Spring Boot Starter JDBC -->
         <dependency>

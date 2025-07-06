@@ -1,8 +1,8 @@
 package com.github.starter.dbmonitor.service;
 
 import com.github.starter.dbmonitor.entity.MonitorConfig;
-import com.github.starter.dbmonitor.mapper.MonitorConfigMapper;
-import com.github.starter.dbmonitor.repository.MonitorConfigRepository;
+import com.github.starter.dbmonitor.repository.JdbcMonitorConfigRepository;
+import com.github.starter.dbmonitor.repository.JdbcTableOperationRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,13 +22,13 @@ import java.util.Optional;
 public class MonitorConfigService {
     
     @Autowired
-    private MonitorConfigRepository monitorConfigRepository;
-    
+    private JdbcMonitorConfigRepository monitorConfigRepository;
+
     @Autowired
     private DataSourceService dataSourceService;
-    
+
     @Autowired
-    private MonitorConfigMapper monitorConfigMapper;
+    private JdbcTableOperationRepository tableOperationRepository;
 
     @Autowired
     private DatabaseSecurityService databaseSecurityService;
@@ -204,7 +204,7 @@ public class MonitorConfigService {
         databaseSecurityService.sanitizeTableName(tableName);
 
         try {
-            return monitorConfigMapper.getTableColumns(tableName);
+            return tableOperationRepository.getTableColumns(tableName);
         } catch (Exception e) {
             log.error("获取表 {} 的列信息失败: {}", tableName, e.getMessage(), e);
             throw new RuntimeException("获取表列信息失败: " + e.getMessage(), e);
@@ -220,7 +220,7 @@ public class MonitorConfigService {
         databaseSecurityService.sanitizeTableName(tableName);
 
         try {
-            return monitorConfigMapper.detectTimeColumns(tableName);
+            return tableOperationRepository.detectTimeColumns(tableName);
         } catch (Exception e) {
             log.error("自动检测表 {} 的时间字段失败: {}", tableName, e.getMessage(), e);
             throw new RuntimeException("自动检测时间字段失败: " + e.getMessage(), e);
@@ -282,14 +282,14 @@ public class MonitorConfigService {
             databaseSecurityService.sanitizeColumnName(config.getTimeColumnName());
 
             // 检查表是否存在
-            Integer tableCount = monitorConfigMapper.checkTableExists(config.getTableName());
-            if (tableCount == null || tableCount == 0) {
+            boolean tableExists = tableOperationRepository.checkTableExists(config.getTableName());
+            if (!tableExists) {
                 throw new IllegalArgumentException("表不存在: " + config.getTableName());
             }
 
             // 检查时间字段是否存在
-            Integer columnCount = monitorConfigMapper.checkColumnExists(config.getTableName(), config.getTimeColumnName());
-            if (columnCount == null || columnCount == 0) {
+            boolean columnExists = tableOperationRepository.checkColumnExists(config.getTableName(), config.getTimeColumnName());
+            if (!columnExists) {
                 throw new IllegalArgumentException("时间字段不存在: " + config.getTimeColumnName());
             }
 
@@ -302,5 +302,19 @@ public class MonitorConfigService {
             log.error("验证表和时间字段失败: {}", e.getMessage(), e);
             throw new RuntimeException("验证表和时间字段失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 启用监控配置
+     */
+    public boolean enableConfig(Long id, String updatedBy) {
+        return monitorConfigRepository.updateEnabled(id, true, updatedBy);
+    }
+
+    /**
+     * 禁用监控配置
+     */
+    public boolean disableConfig(Long id, String updatedBy) {
+        return monitorConfigRepository.updateEnabled(id, false, updatedBy);
     }
 }

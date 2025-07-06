@@ -2,7 +2,7 @@ package com.github.starter.dbmonitor.service;
 
 import com.github.starter.dbmonitor.config.DbMonitorProperties;
 import com.github.starter.dbmonitor.entity.DbMonitorStatistics;
-import com.github.starter.dbmonitor.repository.DbMonitorStatisticsRepository;
+import com.github.starter.dbmonitor.repository.JdbcDbMonitorStatisticsRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -22,7 +22,7 @@ public class DbMonitorMetricsService {
     private DbMonitorProperties dbMonitorProperties;
     
     @Autowired
-    private DbMonitorStatisticsRepository statisticsRepository;
+    private JdbcDbMonitorStatisticsRepository statisticsRepository;
     
     @Autowired
     private DataSourceService dataSourceService;

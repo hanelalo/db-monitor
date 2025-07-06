@@ -3,8 +3,8 @@ package com.github.starter.dbmonitor.service;
 import com.github.starter.dbmonitor.config.DbMonitorProperties;
 import com.github.starter.dbmonitor.entity.DbMonitorStatistics;
 import com.github.starter.dbmonitor.entity.MonitorConfig;
-import com.github.starter.dbmonitor.mapper.TableOperationMapper;
-import com.github.starter.dbmonitor.repository.DbMonitorStatisticsRepository;
+import com.github.starter.dbmonitor.repository.JdbcTableOperationRepository;
+import com.github.starter.dbmonitor.repository.JdbcDbMonitorStatisticsRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,7 +26,7 @@ public class DbMonitorService {
     private DbMonitorProperties dbMonitorProperties;
     
     @Autowired
-    private DbMonitorStatisticsRepository statisticsRepository;
+    private JdbcDbMonitorStatisticsRepository statisticsRepository;
     
     @Autowired
     private DataSourceService dataSourceService;
@@ -41,7 +41,7 @@ public class DbMonitorService {
     private MonitorConfigService monitorConfigService;
     
     @Autowired
-    private TableOperationMapper tableOperationMapper;
+    private JdbcTableOperationRepository tableOperationRepository;
 
     @Autowired
     private DatabaseSecurityService databaseSecurityService;
@@ -187,7 +187,7 @@ public class DbMonitorService {
     private Long queryTableIncrementWithConfig(MonitorConfig config, 
                                               LocalDateTime startTime, LocalDateTime endTime) {
         try {
-            Long count = tableOperationMapper.queryTableIncrement(
+            Long count = tableOperationRepository.queryTableIncrement(
                 config.getTableName(), config.getTimeColumnName(), startTime, endTime);
             log.debug("表 {} 使用时间字段 {} 查询到增量数据: {}", 
                     config.getTableName(), config.getTimeColumnName(), count);
@@ -210,7 +210,7 @@ public class DbMonitorService {
             
             for (String timeColumn : timeColumns) {
                 try {
-                    Long count = tableOperationMapper.queryTableIncrement(tableName, timeColumn, startTime, endTime);
+                    Long count = tableOperationRepository.queryTableIncrement(tableName, timeColumn, startTime, endTime);
                     log.debug("表 {} 使用时间字段 {} 查询到增量数据: {}", tableName, timeColumn, count);
                     return count != null ? count : 0L;
                     
@@ -291,7 +291,7 @@ public class DbMonitorService {
      * 获取指定表的监控统计数据
      */
     public List<DbMonitorStatistics> getTableStatistics(String tableName) {
-        return statisticsRepository.findByDataSourceNameAndTableNameOrderByStatisticTimeDesc(
+        return statisticsRepository.findByDataSourceAndTable(
             dbMonitorProperties.getDataSourceName(), tableName
         );
     }

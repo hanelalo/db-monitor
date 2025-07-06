@@ -1,6 +1,6 @@
 package com.github.starter.dbmonitor.service;
 
-import com.github.starter.dbmonitor.mapper.TableOperationMapper;
+import com.github.starter.dbmonitor.repository.JdbcTableOperationRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -17,7 +17,7 @@ import java.util.Map;
 public class DiskSpaceEstimationService {
     
     @Autowired
-    private TableOperationMapper tableOperationMapper;
+    private JdbcTableOperationRepository tableOperationRepository;
     
     private final Map<String, Long> tableRowSizeCache = new HashMap<>();
     
@@ -107,7 +107,7 @@ public class DiskSpaceEstimationService {
      */
     private Long getAvgRowSizeFromInformationSchema(String tableName) {
         try {
-            return tableOperationMapper.getAvgRowSizeFromInformationSchema(tableName);
+            return tableOperationRepository.getAvgRowSizeFromInformationSchema(tableName);
         } catch (Exception e) {
             log.debug("无法从 INFORMATION_SCHEMA 获取表 {} 的平均行大小: {}", tableName, e.getMessage());
             return null;
@@ -119,7 +119,7 @@ public class DiskSpaceEstimationService {
      */
     private Long getAvgRowSizeFromShowTableStatus(String tableName) {
         try {
-            Map<String, Object> tableStatus = tableOperationMapper.getTableStatusInfo(tableName);
+            Map<String, Object> tableStatus = tableOperationRepository.getTableStatusInfo(tableName);
             if (tableStatus != null && !tableStatus.isEmpty()) {
                 Object dataLengthObj = tableStatus.get("Data_length");
                 Object rowsObj = tableStatus.get("Rows");
@@ -145,7 +145,7 @@ public class DiskSpaceEstimationService {
      */
     private Long estimateRowSizeFromSchema(String tableName) {
         try {
-            List<Map<String, Object>> schemaInfo = tableOperationMapper.getTableSchemaInfo(tableName);
+            List<Map<String, Object>> schemaInfo = tableOperationRepository.getTableColumnDetails(tableName);
             
             long totalSize = 0;
             for (Map<String, Object> columnInfo : schemaInfo) {
