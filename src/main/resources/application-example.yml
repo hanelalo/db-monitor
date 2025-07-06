@@ -32,7 +32,14 @@ db:
       log-path: /data/applogs/xxl-job/jobhandler       # 执行器日志路径
       log-retention-days: 30                            # 执行器日志文件保存天数
       cron: 0 */10 * * * ?                             # 调度任务Cron表达式
-    
+
+    # 分片执行配置
+    sharding:
+      enabled: true                    # 是否启用分片执行
+      strategy: CONFIG_ID              # 分片策略: CONFIG_ID, TABLE_NAME, HASH
+      max-configs-per-shard: 100       # 单个分片最大处理配置数
+      timeout-seconds: 3600            # 分片超时时间（秒）
+
     # 监控数据表配置
     monitor-table:
       table-name: db_monitor_statistics  # 监控数据表名

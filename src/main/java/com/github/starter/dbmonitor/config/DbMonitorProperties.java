@@ -39,7 +39,12 @@ public class DbMonitorProperties {
      * XXL-Job配置
      */
     private XxlJobConfig xxlJob = new XxlJobConfig();
-    
+
+    /**
+     * 分片执行配置
+     */
+    private Sharding sharding = new Sharding();
+
     /**
      * 监控数据表配置
      */
@@ -212,5 +217,18 @@ public class DbMonitorProperties {
          * 如果不指定，则使用 configDataSourceName 或 dataSourceName
          */
         private String dataSourceName;
+    }
+
+    @Data
+    public static class Sharding {
+        /**
+         * 是否启用分片执行
+         */
+        private boolean enabled = true;
+
+        /**
+         * 分片超时时间（秒）
+         */
+        private int timeoutSeconds = 3600; // 1小时
     }
 }

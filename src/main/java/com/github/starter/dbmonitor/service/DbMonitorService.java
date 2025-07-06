@@ -46,11 +46,31 @@ public class DbMonitorService {
     private DatabaseSecurityService databaseSecurityService;
     
     /**
-     * 执行数据库监控任务
+     * 执行数据库监控任务（非分片模式）
      */
     public void executeMonitoring() {
-        log.info("开始执行数据库监控任务");
+        executeMonitoring(null);
+    }
 
+    /**
+     * 执行数据库监控任务（支持分片）
+     *
+     * @param shardingParam 分片参数，格式："shardIndex/shardTotal" 或 null（非分片模式）
+     */
+    public void executeMonitoring(String shardingParam) {
+        if (shardingParam != null && !shardingParam.trim().isEmpty()) {
+            log.info("开始执行数据库监控任务（分片模式），分片参数: {}", shardingParam);
+            executeMonitoringWithSharding(shardingParam);
+        } else {
+            log.info("开始执行数据库监控任务（非分片模式）");
+            executeMonitoringWithoutSharding();
+        }
+    }
+
+    /**
+     * 执行数据库监控任务（非分片模式）
+     */
+    private void executeMonitoringWithoutSharding() {
         try {
             // 获取所有启用的监控配置
             List<MonitorConfig> enabledConfigs = monitorConfigService.getEnabledConfigs();
@@ -80,6 +100,51 @@ public class DbMonitorService {
         } catch (Exception e) {
             log.error("执行数据库监控任务时发生错误: {}", e.getMessage(), e);
             throw new RuntimeException("监控任务执行失败", e);
+        }
+    }
+
+    /**
+     * 执行数据库监控任务（分片模式）
+     */
+    private void executeMonitoringWithSharding(String shardingParam) {
+        try {
+            // 直接使用分片参数查询当前分片需要处理的监控配置
+            List<MonitorConfig> shardConfigs = monitorConfigService.getEnabledConfigs(shardingParam);
+
+            if (shardConfigs.isEmpty()) {
+                log.info("当前分片无需处理的监控配置，跳过执行");
+                return;
+            }
+
+            // 解析分片参数用于日志输出
+            String[] parts = shardingParam.trim().split("/");
+            int shardIndex = Integer.parseInt(parts[0]);
+            int shardTotal = Integer.parseInt(parts[1]);
+
+            log.info("分片执行 - 当前分片 {}/{} 需处理配置数: {}",
+                    shardIndex + 1, shardTotal, shardConfigs.size());
+
+            int successCount = 0;
+            int failureCount = 0;
+
+            // 遍历当前分片的监控配置进行监控
+            for (MonitorConfig config : shardConfigs) {
+                try {
+                    monitorTableWithConfigInTransaction(config);
+                    successCount++;
+                    log.debug("分片执行 - 监控配置 {} 执行成功", config.getConfigName());
+                } catch (Exception e) {
+                    failureCount++;
+                    log.error("分片执行 - 监控配置 {} 执行失败: {}", config.getConfigName(), e.getMessage(), e);
+                }
+            }
+
+            log.info("分片数据库监控任务执行完成 - 分片 {}/{}, 成功: {}, 失败: {}, 总计: {}",
+                    shardIndex + 1, shardTotal, successCount, failureCount, shardConfigs.size());
+
+        } catch (Exception e) {
+            log.error("执行分片数据库监控任务时发生错误: {}", e.getMessage(), e);
+            throw new RuntimeException("分片监控任务执行失败", e);
         }
     }
 
@@ -119,9 +184,9 @@ public class DbMonitorService {
                     // 使用配置的时间字段查询增量数据
                     Long incrementCount = queryTableIncrementWithConfig(config, timeRange.getStartTime(), timeRange.getEndTime());
 
-                    // 估算增量数据的磁盘空间使用量
+                    // 估算增量数据的磁盘空间使用量（使用配置的数据源）
                     DiskSpaceEstimationService.DiskSpaceEstimation diskSpaceEstimation =
-                        diskSpaceEstimationService.estimateIncrementalDiskSpace(config.getTableName(), incrementCount);
+                        diskSpaceEstimationService.estimateIncrementalDiskSpace(config.getDataSourceName(), config.getTableName(), incrementCount);
 
                     // 创建统计记录
                     DbMonitorStatistics statistics = new DbMonitorStatistics(
@@ -366,6 +431,8 @@ public class DbMonitorService {
                 return value; // 默认按分钟
         }
     }
+
+
 
     /**
      * 时间范围内部类

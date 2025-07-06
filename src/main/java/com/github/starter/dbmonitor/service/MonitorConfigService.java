@@ -140,6 +140,35 @@ public class MonitorConfigService {
     public List<MonitorConfig> getEnabledConfigs() {
         return monitorConfigRepository.findAllEnabled();
     }
+
+    /**
+     * 获取所有启用的监控配置（支持分片）
+     */
+    public List<MonitorConfig> getEnabledConfigs(String shardingParam) {
+        if (shardingParam == null || shardingParam.trim().isEmpty()) {
+            return getEnabledConfigs(); // 非分片模式
+        }
+
+        try {
+            // 解析分片参数
+            String[] parts = shardingParam.trim().split("/");
+            if (parts.length != 2) {
+                throw new IllegalArgumentException("分片参数格式错误，应为 'shardIndex/shardTotal'");
+            }
+
+            int shardIndex = Integer.parseInt(parts[0]);
+            int shardTotal = Integer.parseInt(parts[1]);
+
+            if (shardIndex < 0 || shardTotal <= 0 || shardIndex >= shardTotal) {
+                throw new IllegalArgumentException("分片参数值错误：shardIndex=" + shardIndex + ", shardTotal=" + shardTotal);
+            }
+
+            return monitorConfigRepository.findAllEnabledWithSharding(shardIndex, shardTotal);
+
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("分片参数格式错误，无法解析数字: " + shardingParam, e);
+        }
+    }
     
     /**
      * 根据数据源获取监控配置

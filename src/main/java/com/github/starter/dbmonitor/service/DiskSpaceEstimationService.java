@@ -23,31 +23,45 @@ public class DiskSpaceEstimationService {
     
     /**
      * 估算增量数据的磁盘空间使用量
-     * 
+     *
      * @param tableName 表名
      * @param incrementCount 增量数据行数
      * @return 磁盘空间估计结果
      */
-    public DiskSpaceEstimation estimateIncrementalDiskSpace(String tableName, 
+    public DiskSpaceEstimation estimateIncrementalDiskSpace(String tableName,
+                                                           Long incrementCount) {
+        return estimateIncrementalDiskSpace(null, tableName, incrementCount);
+    }
+
+    /**
+     * 估算增量数据的磁盘空间使用量（支持指定数据源）
+     *
+     * @param dataSourceName 数据源名称，null表示使用默认数据源
+     * @param tableName 表名
+     * @param incrementCount 增量数据行数
+     * @return 磁盘空间估计结果
+     */
+    public DiskSpaceEstimation estimateIncrementalDiskSpace(String dataSourceName,
+                                                           String tableName,
                                                            Long incrementCount) {
         try {
             if (incrementCount == null || incrementCount <= 0) {
                 return new DiskSpaceEstimation(0L, 0L);
             }
-            
+
             // 获取表的平均行大小
-            Long avgRowSize = getAvgRowSize(tableName);
-            
+            Long avgRowSize = getAvgRowSize(dataSourceName, tableName);
+
             // 计算总的磁盘空间估计
             Long totalEstimatedSize = avgRowSize * incrementCount;
-            
-            log.debug("表 {} 的平均行大小: {} 字节, 增量数据 {} 行, 估计磁盘空间: {} 字节", 
-                     tableName, avgRowSize, incrementCount, totalEstimatedSize);
-            
+
+            log.debug("数据源 {} 表 {} 的平均行大小: {} 字节, 增量数据 {} 行, 估计磁盘空间: {} 字节",
+                     dataSourceName, tableName, avgRowSize, incrementCount, totalEstimatedSize);
+
             return new DiskSpaceEstimation(totalEstimatedSize, avgRowSize);
-            
+
         } catch (Exception e) {
-            log.error("估算表 {} 增量数据磁盘空间时发生错误: {}", tableName, e.getMessage(), e);
+            log.error("估算数据源 {} 表 {} 增量数据磁盘空间时发生错误: {}", dataSourceName, tableName, e.getMessage(), e);
             return new DiskSpaceEstimation(0L, 0L);
         }
     }
@@ -56,17 +70,24 @@ public class DiskSpaceEstimationService {
      * 获取表的平均行大小
      */
     private Long getAvgRowSize(String tableName) {
+        return getAvgRowSize(null, tableName);
+    }
+
+    /**
+     * 获取表的平均行大小（支持指定数据源）
+     */
+    private Long getAvgRowSize(String dataSourceName, String tableName) {
         // 先从缓存中获取
-        String cacheKey = tableName.toLowerCase();
+        String cacheKey = (dataSourceName != null ? dataSourceName + "." : "") + tableName.toLowerCase();
         if (tableRowSizeCache.containsKey(cacheKey)) {
             return tableRowSizeCache.get(cacheKey);
         }
-        
-        Long avgRowSize = calculateAvgRowSize(tableName);
-        
+
+        Long avgRowSize = calculateAvgRowSize(dataSourceName, tableName);
+
         // 缓存结果（缓存30分钟）
         tableRowSizeCache.put(cacheKey, avgRowSize);
-        
+
         return avgRowSize;
     }
     
@@ -74,30 +95,37 @@ public class DiskSpaceEstimationService {
      * 计算表的平均行大小
      */
     private Long calculateAvgRowSize(String tableName) {
+        return calculateAvgRowSize(null, tableName);
+    }
+
+    /**
+     * 计算表的平均行大小（支持指定数据源）
+     */
+    private Long calculateAvgRowSize(String dataSourceName, String tableName) {
         try {
             // 方法1: 尝试使用 INFORMATION_SCHEMA 获取表统计信息
-            Long avgRowSize = getAvgRowSizeFromInformationSchema(tableName);
+            Long avgRowSize = getAvgRowSizeFromInformationSchema(dataSourceName, tableName);
             if (avgRowSize != null && avgRowSize > 0) {
                 return avgRowSize;
             }
-            
+
             // 方法2: 尝试使用 SHOW TABLE STATUS 获取表统计信息
-            avgRowSize = getAvgRowSizeFromShowTableStatus(tableName);
+            avgRowSize = getAvgRowSizeFromShowTableStatus(dataSourceName, tableName);
             if (avgRowSize != null && avgRowSize > 0) {
                 return avgRowSize;
             }
-            
+
             // 方法3: 基于表结构估算行大小
-            avgRowSize = estimateRowSizeFromSchema(tableName);
+            avgRowSize = estimateRowSizeFromSchema(dataSourceName, tableName);
             if (avgRowSize != null && avgRowSize > 0) {
                 return avgRowSize;
             }
-            
+
             // 默认值：假设每行平均100字节
             return 100L;
-            
+
         } catch (Exception e) {
-            log.error("计算表 {} 平均行大小时发生错误: {}", tableName, e.getMessage(), e);
+            log.error("计算数据源 {} 表 {} 平均行大小时发生错误: {}", dataSourceName, tableName, e.getMessage(), e);
             return 100L; // 默认值
         }
     }
@@ -106,10 +134,17 @@ public class DiskSpaceEstimationService {
      * 从 INFORMATION_SCHEMA 获取平均行大小
      */
     private Long getAvgRowSizeFromInformationSchema(String tableName) {
+        return getAvgRowSizeFromInformationSchema(null, tableName);
+    }
+
+    /**
+     * 从 INFORMATION_SCHEMA 获取平均行大小（支持指定数据源）
+     */
+    private Long getAvgRowSizeFromInformationSchema(String dataSourceName, String tableName) {
         try {
-            return tableOperationRepository.getAvgRowSizeFromInformationSchema(tableName);
+            return tableOperationRepository.getAvgRowSizeFromInformationSchema(dataSourceName, tableName);
         } catch (Exception e) {
-            log.debug("无法从 INFORMATION_SCHEMA 获取表 {} 的平均行大小: {}", tableName, e.getMessage());
+            log.debug("无法从数据源 {} 的 INFORMATION_SCHEMA 获取表 {} 的平均行大小: {}", dataSourceName, tableName, e.getMessage());
             return null;
         }
     }
@@ -118,16 +153,23 @@ public class DiskSpaceEstimationService {
      * 从 SHOW TABLE STATUS 获取平均行大小
      */
     private Long getAvgRowSizeFromShowTableStatus(String tableName) {
+        return getAvgRowSizeFromShowTableStatus(null, tableName);
+    }
+
+    /**
+     * 从 SHOW TABLE STATUS 获取平均行大小（支持指定数据源）
+     */
+    private Long getAvgRowSizeFromShowTableStatus(String dataSourceName, String tableName) {
         try {
-            Map<String, Object> tableStatus = tableOperationRepository.getTableStatusInfo(tableName);
+            Map<String, Object> tableStatus = tableOperationRepository.getTableStatusInfo(dataSourceName, tableName);
             if (tableStatus != null && !tableStatus.isEmpty()) {
                 Object dataLengthObj = tableStatus.get("Data_length");
                 Object rowsObj = tableStatus.get("Rows");
-                
+
                 if (dataLengthObj != null && rowsObj != null) {
                     Long dataLength = Long.valueOf(dataLengthObj.toString());
                     Long rows = Long.valueOf(rowsObj.toString());
-                    
+
                     if (rows > 0 && dataLength > 0) {
                         return dataLength / rows;
                     }
@@ -135,7 +177,7 @@ public class DiskSpaceEstimationService {
             }
             return null;
         } catch (Exception e) {
-            log.debug("无法从 SHOW TABLE STATUS 获取表 {} 的平均行大小: {}", tableName, e.getMessage());
+            log.debug("无法从数据源 {} 的 SHOW TABLE STATUS 获取表 {} 的平均行大小: {}", dataSourceName, tableName, e.getMessage());
             return null;
         }
     }
@@ -144,21 +186,28 @@ public class DiskSpaceEstimationService {
      * 基于表结构估算行大小
      */
     private Long estimateRowSizeFromSchema(String tableName) {
+        return estimateRowSizeFromSchema(null, tableName);
+    }
+
+    /**
+     * 基于表结构估算行大小（支持指定数据源）
+     */
+    private Long estimateRowSizeFromSchema(String dataSourceName, String tableName) {
         try {
-            List<Map<String, Object>> schemaInfo = tableOperationRepository.getTableColumnDetails(tableName);
-            
+            List<Map<String, Object>> schemaInfo = tableOperationRepository.getTableColumnDetails(dataSourceName, tableName);
+
             long totalSize = 0;
             for (Map<String, Object> columnInfo : schemaInfo) {
                 String dataType = columnInfo.get("DATA_TYPE").toString().toLowerCase();
                 long charLength = Long.valueOf(columnInfo.get("CHAR_LENGTH").toString());
                 int numPrecision = Integer.valueOf(columnInfo.get("NUM_PRECISION").toString());
-                
+
                 totalSize += estimateColumnSize(dataType, charLength, numPrecision);
             }
-            
+
             return totalSize > 0 ? totalSize : null;
         } catch (Exception e) {
-            log.debug("无法基于表结构估算表 {} 的行大小: {}", tableName, e.getMessage());
+            log.debug("无法基于数据源 {} 表结构估算表 {} 的行大小: {}", dataSourceName, tableName, e.getMessage());
             return null;
         }
     }

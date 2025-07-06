@@ -253,6 +253,15 @@ public class JdbcMonitorConfigRepository extends MultiDataSourceRepository {
         String sql = "SELECT * FROM " + tableName + " WHERE enabled = TRUE ORDER BY created_time DESC";
         return getConfigJdbcTemplate().query(sql, rowMapper);
     }
+
+    /**
+     * 查找启用的监控配置（支持分片）
+     */
+    public List<MonitorConfig> findAllEnabledWithSharding(int shardIndex, int shardTotal) {
+        String tableName = getTableName();
+        String sql = "SELECT * FROM " + tableName + " WHERE enabled = TRUE AND ABS(id) % ? = ? ORDER BY created_time DESC";
+        return getConfigJdbcTemplate().query(sql, rowMapper, shardTotal, shardIndex);
+    }
     
     /**
      * 根据数据源查找监控配置

@@ -41,6 +41,14 @@ db:
       value: 1  # 1分钟间隔用于演示
     xxl-job:
       enabled: false
+
+    # 分片执行配置
+    sharding:
+      enabled: true                    # 启用分片执行（演示用）
+      strategy: CONFIG_ID              # 使用配置ID分片策略
+      max-configs-per-shard: 50        # 单个分片最大处理50个配置
+      timeout-seconds: 1800            # 30分钟超时
+
     monitor-table:
       table-name: db_monitor_statistics
       auto-create: true

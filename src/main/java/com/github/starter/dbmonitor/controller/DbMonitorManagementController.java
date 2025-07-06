@@ -23,16 +23,30 @@ public class DbMonitorManagementController {
     private DbMonitorService dbMonitorService;
     
     /**
-     * 手动触发监控任务
+     * 手动触发监控任务（非分片模式）
      */
     @PostMapping("/trigger")
     public ResponseEntity<String> triggerMonitoring() {
         try {
             dbMonitorService.executeMonitoring();
-            return ResponseEntity.ok("监控任务已触发");
+            return ResponseEntity.ok("监控任务已触发（非分片模式）");
         } catch (Exception e) {
             log.error("手动触发监控任务失败: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("触发监控任务失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 手动触发监控任务（分片模式）
+     */
+    @PostMapping("/trigger/shard")
+    public ResponseEntity<String> triggerMonitoringWithShard(@RequestParam String shardingParam) {
+        try {
+            dbMonitorService.executeMonitoring(shardingParam);
+            return ResponseEntity.ok("分片监控任务已触发，分片参数: " + shardingParam);
+        } catch (Exception e) {
+            log.error("手动触发分片监控任务失败: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("触发分片监控任务失败: " + e.getMessage());
         }
     }
     
