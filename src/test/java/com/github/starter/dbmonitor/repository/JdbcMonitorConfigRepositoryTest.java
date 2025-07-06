@@ -1,11 +1,13 @@
 package com.github.starter.dbmonitor.repository;
 
+import com.github.starter.dbmonitor.config.DbMonitorProperties;
 import com.github.starter.dbmonitor.entity.MonitorConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -29,8 +31,12 @@ import static org.mockito.Mockito.*;
 class JdbcMonitorConfigRepositoryTest {
 
     @Mock
+    private DbMonitorProperties dbMonitorProperties;
+
+    @Mock
     private JdbcTemplate jdbcTemplate;
 
+    @Spy
     @InjectMocks
     private JdbcMonitorConfigRepository repository;
 
@@ -38,6 +44,18 @@ class JdbcMonitorConfigRepositoryTest {
 
     @BeforeEach
     void setUp() {
+        // 设置 DbMonitorProperties mock (使用 lenient 模式)
+        DbMonitorProperties.ConfigTable configTable = new DbMonitorProperties.ConfigTable();
+        configTable.setTableName("db_monitor_config");
+        configTable.setAutoCreate(true);
+
+        lenient().when(dbMonitorProperties.getConfigTable()).thenReturn(configTable);
+        lenient().when(dbMonitorProperties.getDataSourceName()).thenReturn("primary");
+        lenient().when(dbMonitorProperties.getConfigDataSourceName()).thenReturn(null);
+
+        // Mock getJdbcTemplate 方法返回 mock 的 jdbcTemplate
+        lenient().doReturn(jdbcTemplate).when(repository).getJdbcTemplate(anyString());
+
         testConfig = new MonitorConfig();
         testConfig.setId(1L);
         testConfig.setConfigName("test-config");

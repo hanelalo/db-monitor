@@ -13,55 +13,74 @@ import java.util.Map;
 
 /**
  * 基于JdbcTemplate的轻量级表操作数据访问层
- * 避免引入MyBatis等重量级ORM框架
+ * 支持多数据源操作，避免引入MyBatis等重量级ORM框架
  */
 @Repository
 @Slf4j
-public class JdbcTableOperationRepository {
-    
+public class JdbcTableOperationRepository extends MultiDataSourceRepository {
+
     @Autowired
-    private JdbcTemplate jdbcTemplate;
+    private JdbcTemplate jdbcTemplate; // 保留默认JdbcTemplate用于向后兼容
     
     /**
-     * 获取数据库中所有表名
+     * 获取数据库中所有表名（使用默认数据源）
      */
     public List<String> getAllTableNames() {
+        return getAllTableNames(null);
+    }
+
+    /**
+     * 获取指定数据源中的所有表名
+     */
+    public List<String> getAllTableNames(String dataSourceName) {
         try {
+            JdbcTemplate template = (dataSourceName != null) ? getJdbcTemplate(dataSourceName) : jdbcTemplate;
+
             // 尝试使用标准的 INFORMATION_SCHEMA 查询
             try {
                 String sql = "SELECT table_name FROM information_schema.tables " +
                            "WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE'";
-                return jdbcTemplate.queryForList(sql, String.class);
+                return template.queryForList(sql, String.class);
             } catch (Exception e) {
                 log.debug("使用 INFORMATION_SCHEMA 查询失败，尝试使用 SHOW TABLES: {}", e.getMessage());
             }
-            
+
             // 如果上面的查询失败，尝试使用 SHOW TABLES
-            return jdbcTemplate.queryForList("SHOW TABLES", String.class);
-            
+            return template.queryForList("SHOW TABLES", String.class);
+
         } catch (Exception e) {
-            log.error("获取数据库表名失败: {}", e.getMessage(), e);
+            log.error("获取数据源 {} 的数据库表名失败: {}", dataSourceName, e.getMessage(), e);
             return new ArrayList<>();
         }
     }
     
     /**
-     * 检查表是否存在
+     * 检查表是否存在（使用默认数据源）
      */
     public boolean checkTableExists(String tableName) {
+        return checkTableExists(null, tableName);
+    }
+
+    /**
+     * 检查指定数据源中的表是否存在
+     */
+    public boolean checkTableExists(String dataSourceName, String tableName) {
         try {
+            JdbcTemplate template = (dataSourceName != null) ? getJdbcTemplate(dataSourceName) : jdbcTemplate;
+
             String sql = "SELECT COUNT(*) FROM information_schema.tables " +
                         "WHERE table_schema = DATABASE() AND table_name = ?";
-            Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tableName);
+            Integer count = template.queryForObject(sql, Integer.class, tableName);
             return count != null && count > 0;
         } catch (Exception e) {
             log.debug("使用 INFORMATION_SCHEMA 检查表存在性失败，尝试直接查询表: {}", e.getMessage());
             try {
+                JdbcTemplate template = (dataSourceName != null) ? getJdbcTemplate(dataSourceName) : jdbcTemplate;
                 // 尝试直接查询表
-                jdbcTemplate.queryForObject("SELECT 1 FROM " + tableName + " LIMIT 1", Integer.class);
+                template.queryForObject("SELECT 1 FROM " + tableName + " LIMIT 1", Integer.class);
                 return true;
             } catch (Exception ex) {
-                log.debug("表 {} 不存在或无法访问", tableName);
+                log.debug("数据源 {} 中的表 {} 不存在或无法访问", dataSourceName, tableName);
                 return false;
             }
         }
@@ -133,15 +152,24 @@ public class JdbcTableOperationRepository {
     }
     
     /**
-     * 查询表的增量数据
+     * 查询表的增量数据（使用默认数据源）
      */
-    public Long queryTableIncrement(String tableName, String timeColumn, 
+    public Long queryTableIncrement(String tableName, String timeColumn,
+                                   LocalDateTime startTime, LocalDateTime endTime) {
+        return queryTableIncrement(null, tableName, timeColumn, startTime, endTime);
+    }
+
+    /**
+     * 查询指定数据源中表的增量数据
+     */
+    public Long queryTableIncrement(String dataSourceName, String tableName, String timeColumn,
                                    LocalDateTime startTime, LocalDateTime endTime) {
         try {
+            JdbcTemplate template = (dataSourceName != null) ? getJdbcTemplate(dataSourceName) : jdbcTemplate;
             String sql = "SELECT COUNT(*) FROM " + tableName + " WHERE " + timeColumn + " >= ? AND " + timeColumn + " < ?";
-            return jdbcTemplate.queryForObject(sql, Long.class, startTime, endTime);
+            return template.queryForObject(sql, Long.class, startTime, endTime);
         } catch (Exception e) {
-            log.error("查询表 {} 的增量数据失败: {}", tableName, e.getMessage(), e);
+            log.error("查询数据源 {} 中表 {} 的增量数据失败: {}", dataSourceName, tableName, e.getMessage(), e);
             return 0L;
         }
     }

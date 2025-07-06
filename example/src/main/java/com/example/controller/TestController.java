@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import javax.transaction.Transactional;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -82,7 +83,10 @@ public class TestController {
     @GetMapping("/users/count")
     public Map<String, Object> getUserCount() {
         Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM user_info", Long.class);
-        return Map.of("table", "user_info", "count", count);
+        Map<String, Object> result = new HashMap<>();
+        result.put("table", "user_info");
+        result.put("count", count);
+        return result;
     }
     
     /**
@@ -91,7 +95,10 @@ public class TestController {
     @GetMapping("/orders/count")
     public Map<String, Object> getOrderCount() {
         Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM order_info", Long.class);
-        return Map.of("table", "order_info", "count", count);
+        Map<String, Object> result = new HashMap<>();
+        result.put("table", "order_info");
+        result.put("count", count);
+        return result;
     }
     
     /**

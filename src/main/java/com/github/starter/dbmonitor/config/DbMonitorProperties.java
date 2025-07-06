@@ -21,11 +21,14 @@ public class DbMonitorProperties {
      * 数据源名称，如果不指定则使用默认数据源
      */
     private String dataSourceName = "primary";
-    
+
     /**
-     * 需要监控的表名列表，支持通配符
+     * 监控配置和结果数据存储的数据源名称
+     * 如果不指定，则使用 dataSourceName
      */
-    private List<String> tableNames;
+    private String configDataSourceName;
+    
+
     
     /**
      * 监控时间间隔配置
@@ -41,6 +44,11 @@ public class DbMonitorProperties {
      * 监控数据表配置
      */
     private MonitorTable monitorTable = new MonitorTable();
+
+    /**
+     * 监控配置表配置
+     */
+    private ConfigTable configTable = new ConfigTable();
     
     /**
      * 指标暴露配置
@@ -137,15 +145,72 @@ public class DbMonitorProperties {
          * 是否启用指标暴露
          */
         private boolean enabled = true;
-        
+
         /**
          * 指标前缀
          */
         private String prefix = "db_monitor";
-        
+
         /**
          * 暴露端点路径
          */
         private String endpoint = "/metrics";
+
+        /**
+         * 端点暴露配置
+         */
+        private Endpoints endpoints = new Endpoints();
+    }
+
+    @Data
+    public static class Endpoints {
+        /**
+         * 是否启用所有监控端点
+         */
+        private boolean enabled = true;
+
+        /**
+         * 是否启用指标端点 (/metrics, /metrics/json)
+         */
+        private boolean metricsEnabled = true;
+
+        /**
+         * 是否启用统计数据端点 (/statistics)
+         */
+        private boolean statisticsEnabled = true;
+
+        /**
+         * 是否启用健康检查端点 (/health)
+         */
+        private boolean healthEnabled = true;
+
+        /**
+         * 是否启用管理端点 (/trigger, /cleanup)
+         */
+        private boolean managementEnabled = true;
+
+        /**
+         * 是否启用配置管理端点 (监控配置相关API)
+         */
+        private boolean configEnabled = true;
+    }
+
+    @Data
+    public static class ConfigTable {
+        /**
+         * 监控配置表名
+         */
+        private String tableName = "db_monitor_config";
+
+        /**
+         * 是否自动创建表
+         */
+        private boolean autoCreate = true;
+
+        /**
+         * 配置数据存储的数据源名称
+         * 如果不指定，则使用 configDataSourceName 或 dataSourceName
+         */
+        private String dataSourceName;
     }
 }

@@ -3,15 +3,17 @@ db:
   monitor:
     # 是否启用数据库监控功能
     enabled: true
-    
+
     # 数据源名称（如果不指定则使用默认数据源）
     data-source-name: primary
-    
-    # 需要监控的表名列表，支持通配符
-    table-names:
-      - user_*      # 匹配所有以 user_ 开头的表
-      - order_info  # 精确匹配 order_info 表
-      - product_*   # 匹配所有以 product_ 开头的表
+
+    # 【可选】需要监控的表名列表，支持通配符
+    # 推荐使用动态配置API管理监控表，无需在此配置
+    # 如果需要使用配置文件模式，可以取消下面的注释
+    # table-names:
+    #   - user_*      # 匹配所有以 user_ 开头的表
+    #   - order_info  # 精确匹配 order_info 表
+    #   - product_*   # 匹配所有以 product_ 开头的表
     
     # 监控时间间隔配置
     time-interval:
@@ -43,21 +45,24 @@ db:
       prefix: db_monitor  # 指标前缀
       endpoint: /metrics  # 暴露端点路径
 
+      # 端点暴露配置（可插拔扩展功能）
+      endpoints:
+        enabled: true              # 是否启用所有监控端点
+        metrics-enabled: true      # 是否启用指标端点 (/metrics, /metrics/json)
+        statistics-enabled: true   # 是否启用统计数据端点 (/statistics)
+        health-enabled: true       # 是否启用健康检查端点 (/health)
+        management-enabled: true   # 是否启用管理端点 (/trigger, /cleanup)
+        config-enabled: true       # 是否启用配置管理端点
+
 # Spring Boot Actuator配置（可选）
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info
   endpoint:
     health:
       show-details: always
-    prometheus:
-      enabled: true
-  metrics:
-    export:
-      prometheus:
-        enabled: true
 
 # 数据源配置示例
 spring:

@@ -1,5 +1,6 @@
 package com.github.starter.dbmonitor.repository;
 
+import com.github.starter.dbmonitor.config.DbMonitorProperties;
 import com.github.starter.dbmonitor.entity.MonitorConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,16 +21,49 @@ import java.util.Optional;
 
 /**
  * 基于JdbcTemplate的轻量级监控配置数据访问层
- * 避免引入MyBatis等重量级ORM框架
+ * 支持指定配置存储数据源，避免引入MyBatis等重量级ORM框架
  */
 @Repository
 @Slf4j
-public class JdbcMonitorConfigRepository {
-    
+public class JdbcMonitorConfigRepository extends MultiDataSourceRepository {
+
     @Autowired
-    private JdbcTemplate jdbcTemplate;
-    
-    private static final String TABLE_NAME = "db_monitor_config";
+    private DbMonitorProperties dbMonitorProperties;
+
+    /**
+     * 获取监控配置表名
+     */
+    private String getTableName() {
+        return dbMonitorProperties.getConfigTable().getTableName();
+    }
+
+    /**
+     * 获取配置存储数据源名称
+     */
+    private String getConfigDataSourceName() {
+        // 优先使用配置表专门的数据源配置
+        if (dbMonitorProperties.getConfigTable().getDataSourceName() != null &&
+            !dbMonitorProperties.getConfigTable().getDataSourceName().trim().isEmpty()) {
+            return dbMonitorProperties.getConfigTable().getDataSourceName();
+        }
+
+        // 其次使用通用的配置数据源
+        if (dbMonitorProperties.getConfigDataSourceName() != null &&
+            !dbMonitorProperties.getConfigDataSourceName().trim().isEmpty()) {
+            return dbMonitorProperties.getConfigDataSourceName();
+        }
+
+        // 最后使用默认数据源
+        return dbMonitorProperties.getDataSourceName();
+    }
+
+    /**
+     * 获取用于配置操作的JdbcTemplate
+     */
+    private JdbcTemplate getConfigJdbcTemplate() {
+        String dataSourceName = getConfigDataSourceName();
+        return getJdbcTemplate(dataSourceName);
+    }
     
     // RowMapper for MonitorConfig
     private final RowMapper<MonitorConfig> rowMapper = new RowMapper<MonitorConfig>() {
@@ -61,7 +95,13 @@ public class JdbcMonitorConfigRepository {
      * 创建监控配置表
      */
     public void createTableIfNotExists() {
-        String sql = "CREATE TABLE IF NOT EXISTS " + TABLE_NAME + " (" +
+        if (!dbMonitorProperties.getConfigTable().isAutoCreate()) {
+            log.info("监控配置表自动创建已禁用，跳过表创建");
+            return;
+        }
+
+        String tableName = getTableName();
+        String sql = "CREATE TABLE IF NOT EXISTS " + tableName + " (" +
                 "id BIGINT AUTO_INCREMENT PRIMARY KEY, " +
                 "config_name VARCHAR(100) NOT NULL UNIQUE, " +
                 "data_source_name VARCHAR(100) NOT NULL, " +
@@ -80,12 +120,12 @@ public class JdbcMonitorConfigRepository {
                 "INDEX idx_data_source_table (data_source_name, table_name), " +
                 "INDEX idx_enabled (enabled)" +
                 ")";
-        
+
         try {
-            jdbcTemplate.execute(sql);
-            log.info("监控配置表创建或已存在");
+            getConfigJdbcTemplate().execute(sql);
+            log.info("监控配置表 {} 创建或已存在，数据源: {}", tableName, getConfigDataSourceName());
         } catch (Exception e) {
-            log.error("创建监控配置表失败: {}", e.getMessage(), e);
+            log.error("创建监控配置表 {} 失败: {}", tableName, e.getMessage(), e);
             throw new RuntimeException("创建监控配置表失败", e);
         }
     }
@@ -94,14 +134,15 @@ public class JdbcMonitorConfigRepository {
      * 插入监控配置
      */
     public MonitorConfig insert(MonitorConfig config) {
-        String sql = "INSERT INTO " + TABLE_NAME + 
+        String tableName = getTableName();
+        String sql = "INSERT INTO " + tableName +
                 " (config_name, data_source_name, table_name, time_column_name, time_column_type, " +
                 "enabled, interval_type, interval_value, description, created_time, updated_time, " +
                 "created_by, updated_by, extend_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
+
         KeyHolder keyHolder = new GeneratedKeyHolder();
-        
-        jdbcTemplate.update(connection -> {
+
+        getConfigJdbcTemplate().update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, config.getConfigName());
             ps.setString(2, config.getDataSourceName());
@@ -131,15 +172,16 @@ public class JdbcMonitorConfigRepository {
      * 更新监控配置
      */
     public boolean update(MonitorConfig config) {
-        String sql = "UPDATE " + TABLE_NAME + " SET " +
+        String tableName = getTableName();
+        String sql = "UPDATE " + tableName + " SET " +
                 "config_name = ?, data_source_name = ?, table_name = ?, time_column_name = ?, " +
                 "time_column_type = ?, enabled = ?, interval_type = ?, interval_value = ?, " +
                 "description = ?, updated_time = ?, updated_by = ?, extend_config = ? " +
                 "WHERE id = ?";
-        
+
         config.setUpdatedTime(LocalDateTime.now());
-        
-        int rows = jdbcTemplate.update(sql,
+
+        int rows = getConfigJdbcTemplate().update(sql,
                 config.getConfigName(),
                 config.getDataSourceName(),
                 config.getTableName(),
@@ -161,71 +203,78 @@ public class JdbcMonitorConfigRepository {
      * 根据ID查找监控配置
      */
     public Optional<MonitorConfig> findById(Long id) {
-        String sql = "SELECT * FROM " + TABLE_NAME + " WHERE id = ?";
+        String tableName = getTableName();
+        String sql = "SELECT * FROM " + tableName + " WHERE id = ?";
         try {
-            MonitorConfig config = jdbcTemplate.queryForObject(sql, rowMapper, id);
+            MonitorConfig config = getConfigJdbcTemplate().queryForObject(sql, rowMapper, id);
             return Optional.ofNullable(config);
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
     }
-    
+
     /**
      * 根据配置名称查找监控配置
      */
     public Optional<MonitorConfig> findByConfigName(String configName) {
-        String sql = "SELECT * FROM " + TABLE_NAME + " WHERE config_name = ?";
+        String tableName = getTableName();
+        String sql = "SELECT * FROM " + tableName + " WHERE config_name = ?";
         try {
-            MonitorConfig config = jdbcTemplate.queryForObject(sql, rowMapper, configName);
+            MonitorConfig config = getConfigJdbcTemplate().queryForObject(sql, rowMapper, configName);
             return Optional.ofNullable(config);
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
     }
-    
+
     /**
      * 查找所有监控配置
      */
     public List<MonitorConfig> findAll() {
-        String sql = "SELECT * FROM " + TABLE_NAME + " ORDER BY created_time DESC";
-        return jdbcTemplate.query(sql, rowMapper);
+        String tableName = getTableName();
+        String sql = "SELECT * FROM " + tableName + " ORDER BY created_time DESC";
+        return getConfigJdbcTemplate().query(sql, rowMapper);
     }
-    
+
     /**
      * 查找启用的监控配置
      */
     public List<MonitorConfig> findAllEnabled() {
-        String sql = "SELECT * FROM " + TABLE_NAME + " WHERE enabled = TRUE ORDER BY created_time DESC";
-        return jdbcTemplate.query(sql, rowMapper);
+        String tableName = getTableName();
+        String sql = "SELECT * FROM " + tableName + " WHERE enabled = TRUE ORDER BY created_time DESC";
+        return getConfigJdbcTemplate().query(sql, rowMapper);
     }
     
     /**
      * 根据数据源查找监控配置
      */
     public List<MonitorConfig> findByDataSourceName(String dataSourceName) {
-        String sql = "SELECT * FROM " + TABLE_NAME + " WHERE data_source_name = ? ORDER BY created_time DESC";
-        return jdbcTemplate.query(sql, rowMapper, dataSourceName);
+        String tableName = getTableName();
+        String sql = "SELECT * FROM " + tableName + " WHERE data_source_name = ? ORDER BY created_time DESC";
+        return getConfigJdbcTemplate().query(sql, rowMapper, dataSourceName);
     }
-    
+
     /**
      * 根据数据源和表名查找监控配置
      */
     public Optional<MonitorConfig> findByDataSourceNameAndTableName(String dataSourceName, String tableName) {
-        String sql = "SELECT * FROM " + TABLE_NAME + " WHERE data_source_name = ? AND table_name = ?";
+        String configTableName = getTableName();
+        String sql = "SELECT * FROM " + configTableName + " WHERE data_source_name = ? AND table_name = ?";
         try {
-            MonitorConfig config = jdbcTemplate.queryForObject(sql, rowMapper, dataSourceName, tableName);
+            MonitorConfig config = getConfigJdbcTemplate().queryForObject(sql, rowMapper, dataSourceName, tableName);
             return Optional.ofNullable(config);
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
     }
-    
+
     /**
      * 根据ID删除监控配置
      */
     public boolean deleteById(Long id) {
-        String sql = "DELETE FROM " + TABLE_NAME + " WHERE id = ?";
-        int rows = jdbcTemplate.update(sql, id);
+        String tableName = getTableName();
+        String sql = "DELETE FROM " + tableName + " WHERE id = ?";
+        int rows = getConfigJdbcTemplate().update(sql, id);
         return rows > 0;
     }
     
@@ -233,11 +282,12 @@ public class JdbcMonitorConfigRepository {
      * 启用或禁用监控配置
      */
     public boolean updateEnabled(Long id, Boolean enabled, String updatedBy) {
-        String sql = "UPDATE " + TABLE_NAME + " SET enabled = ?, updated_by = ?, updated_time = ? WHERE id = ?";
-        int rows = jdbcTemplate.update(sql, enabled, updatedBy, LocalDateTime.now(), id);
+        String tableName = getTableName();
+        String sql = "UPDATE " + tableName + " SET enabled = ?, updated_by = ?, updated_time = ? WHERE id = ?";
+        int rows = getConfigJdbcTemplate().update(sql, enabled, updatedBy, LocalDateTime.now(), id);
         return rows > 0;
     }
-    
+
     /**
      * 批量启用或禁用监控配置
      */
@@ -245,10 +295,11 @@ public class JdbcMonitorConfigRepository {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
-        
-        String sql = "UPDATE " + TABLE_NAME + " SET enabled = ?, updated_by = ?, updated_time = ? WHERE id IN (" +
+
+        String tableName = getTableName();
+        String sql = "UPDATE " + tableName + " SET enabled = ?, updated_by = ?, updated_time = ? WHERE id IN (" +
                 String.join(",", ids.stream().map(id -> "?").toArray(String[]::new)) + ")";
-        
+
         Object[] params = new Object[ids.size() + 3];
         params[0] = enabled;
         params[1] = updatedBy;
@@ -256,7 +307,7 @@ public class JdbcMonitorConfigRepository {
         for (int i = 0; i < ids.size(); i++) {
             params[i + 3] = ids.get(i);
         }
-        
-        return jdbcTemplate.update(sql, params);
+
+        return getConfigJdbcTemplate().update(sql, params);
     }
 }

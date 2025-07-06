@@ -1,2 +1,3 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-com.github.starter.dbmonitor.config.DbMonitorAutoConfiguration
+com.github.starter.dbmonitor.config.DbMonitorAutoConfiguration,\
+com.github.starter.dbmonitor.config.DbMonitorEndpointsAutoConfiguration

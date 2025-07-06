@@ -49,22 +49,23 @@ db:
       enabled: true
       prefix: db_monitor
       endpoint: /metrics
+      endpoints:
+        enabled: true              # 启用所有端点（演示用）
+        metrics-enabled: true      # 启用指标端点
+        statistics-enabled: true   # 启用统计数据端点
+        health-enabled: true       # 启用健康检查端点
+        management-enabled: true   # 启用管理端点
+        config-enabled: true       # 启用配置管理端点
 
 # Spring Boot Actuator配置
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info
   endpoint:
     health:
       show-details: always
-    prometheus:
-      enabled: true
-  metrics:
-    export:
-      prometheus:
-        enabled: true
 
 # 日志配置
 logging:

@@ -281,16 +281,21 @@ public class MonitorConfigService {
             databaseSecurityService.sanitizeTableName(config.getTableName());
             databaseSecurityService.sanitizeColumnName(config.getTimeColumnName());
 
-            // 检查表是否存在
-            boolean tableExists = tableOperationRepository.checkTableExists(config.getTableName());
-            if (!tableExists) {
-                throw new IllegalArgumentException("表不存在: " + config.getTableName());
+            // 检查数据源是否可用
+            if (!dataSourceService.isDataSourceAvailable(config.getDataSourceName())) {
+                throw new IllegalArgumentException("数据源不可用: " + config.getDataSourceName());
             }
 
-            // 检查时间字段是否存在
-            boolean columnExists = tableOperationRepository.checkColumnExists(config.getTableName(), config.getTimeColumnName());
+            // 检查表是否存在（使用指定的数据源）
+            boolean tableExists = tableOperationRepository.checkTableExists(config.getDataSourceName(), config.getTableName());
+            if (!tableExists) {
+                throw new IllegalArgumentException("数据源 " + config.getDataSourceName() + " 中的表不存在: " + config.getTableName());
+            }
+
+            // 检查时间字段是否存在（使用指定的数据源）
+            boolean columnExists = checkColumnExistsInDataSource(config.getDataSourceName(), config.getTableName(), config.getTimeColumnName());
             if (!columnExists) {
-                throw new IllegalArgumentException("时间字段不存在: " + config.getTimeColumnName());
+                throw new IllegalArgumentException("数据源 " + config.getDataSourceName() + " 中的表 " + config.getTableName() + " 的时间字段不存在: " + config.getTimeColumnName());
             }
 
             log.debug("验证表 {} 和时间字段 {} 成功", config.getTableName(), config.getTimeColumnName());
@@ -316,5 +321,35 @@ public class MonitorConfigService {
      */
     public boolean disableConfig(Long id, String updatedBy) {
         return monitorConfigRepository.updateEnabled(id, false, updatedBy);
+    }
+
+    /**
+     * 从指定数据源获取表的所有列
+     */
+    private List<String> getTableColumnsFromDataSource(String dataSourceName, String tableName) {
+        // 使用多数据源支持
+        return tableOperationRepository.getTableColumns(tableName);
+    }
+
+    /**
+     * 检查指定数据源中的列是否存在
+     */
+    private boolean checkColumnExistsInDataSource(String dataSourceName, String tableName, String columnName) {
+        // 使用多数据源支持
+        return tableOperationRepository.checkColumnExists(tableName, columnName);
+    }
+
+    /**
+     * 获取所有可用的数据源名称
+     */
+    public String[] getAvailableDataSourceNames() {
+        return dataSourceService.getAvailableDataSourceNames();
+    }
+
+    /**
+     * 检查数据源是否可用
+     */
+    public boolean isDataSourceAvailable(String dataSourceName) {
+        return dataSourceService.isDataSourceAvailable(dataSourceName);
     }
 }

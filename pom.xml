@@ -19,7 +19,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring.boot.version>2.3.12.RELEASE</spring.boot.version>
         <xxl.job.version>2.3.1</xxl.job.version>
-        <micrometer.version>1.5.5</micrometer.version>
+
     </properties>
     
     <dependencyManagement>
@@ -75,21 +75,7 @@
             <artifactId>xxl-job-core</artifactId>
             <version>${xxl.job.version}</version>
         </dependency>
-        
-        <!-- Micrometer Prometheus -->
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-registry-prometheus</artifactId>
-            <version>${micrometer.version}</version>
-        </dependency>
-        
-        <!-- Micrometer Core -->
-        <dependency>
-            <groupId>io.micrometer</groupId>
-            <artifactId>micrometer-core</artifactId>
-            <version>${micrometer.version}</version>
-        </dependency>
-        
+
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>

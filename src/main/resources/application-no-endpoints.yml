@@ -1,0 +1,67 @@
+# 数据库监控配置示例 - 仅使用核心监控功能，不暴露HTTP端点
+# 适用于只需要数据采集和存储，不需要HTTP接口的场景
+
+# 数据库监控配置
+db:
+  monitor:
+    # 启用监控功能
+    enabled: true
+    
+    # 数据源配置
+    data-source-name: dataSource
+    config-data-source-name: dataSource
+    
+    # 监控时间间隔
+    time-interval:
+      type: MINUTES
+      value: 10
+    
+    # 监控数据表配置
+    monitor-table:
+      table-name: db_monitor_statistics
+      auto-create: true
+      retention-days: 30
+    
+    # 监控配置表配置
+    config-table:
+      table-name: db_monitor_config
+      auto-create: true
+    
+    # XXL-Job配置（可选）
+    xxl-job:
+      enabled: false
+    
+    # 指标配置 - 禁用所有HTTP端点
+    metrics:
+      enabled: false  # 禁用指标功能
+      endpoints:
+        enabled: false              # 禁用所有监控端点
+        metrics-enabled: false      # 禁用指标端点
+        statistics-enabled: false   # 禁用统计数据端点
+        health-enabled: false       # 禁用健康检查端点
+        management-enabled: false   # 禁用管理端点
+        config-enabled: false       # 禁用配置管理端点
+
+# Spring Boot Actuator配置（最小化）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# 数据源配置示例
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/your_db?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: your_username
+    password: your_password
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# 日志配置
+logging:
+  level:
+    com.github.starter.dbmonitor: INFO
+    root: WARN

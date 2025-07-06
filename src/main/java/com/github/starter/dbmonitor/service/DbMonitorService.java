@@ -10,7 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.sql.DataSource;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -31,8 +30,7 @@ public class DbMonitorService {
     @Autowired
     private DataSourceService dataSourceService;
     
-    @Autowired
-    private TablePatternService tablePatternService;
+
     
     @Autowired
     private DiskSpaceEstimationService diskSpaceEstimationService;
@@ -138,105 +136,29 @@ public class DbMonitorService {
         }
     }
     
-    /**
-     * 监控单个表（保留原有方法以兼容）
-     */
-    private void monitorTable(String tableName, 
-                             LocalDateTime startTime, LocalDateTime endTime) {
-        try {
-            // 查询表的增量数据
-            Long incrementCount = queryTableIncrement(tableName, startTime, endTime);
-            
-            // 估算增量数据的磁盘空间使用量
-            DiskSpaceEstimationService.DiskSpaceEstimation diskSpaceEstimation = 
-                diskSpaceEstimationService.estimateIncrementalDiskSpace(tableName, incrementCount);
-            
-            // 创建统计记录
-            DbMonitorStatistics statistics = new DbMonitorStatistics(
-                dbMonitorProperties.getDataSourceName(),
-                tableName,
-                startTime,
-                endTime,
-                incrementCount,
-                diskSpaceEstimation.getTotalEstimatedSize(),
-                diskSpaceEstimation.getAvgRowSize(),
-                dbMonitorProperties.getTimeInterval().getType(),
-                dbMonitorProperties.getTimeInterval().getValue()
-            );
-            
-            // 设置创建时间
-            statistics.setCreatedTime(LocalDateTime.now());
-            
-            // 保存统计记录
-            statisticsRepository.insert(statistics);
-            
-            log.info("表 {} 在时间范围 {} 到 {} 的增量数据为: {} 行，估计磁盘空间: {} 字节 ({})", 
-                    tableName, startTime, endTime, incrementCount, 
-                    diskSpaceEstimation.getTotalEstimatedSize(), 
-                    formatBytes(diskSpaceEstimation.getTotalEstimatedSize()));
-            
-        } catch (Exception e) {
-            log.error("监控表 {} 时发生错误: {}", tableName, e.getMessage(), e);
-            throw e;
-        }
-    }
+
     
     /**
      * 使用监控配置查询表的增量数据
      */
-    private Long queryTableIncrementWithConfig(MonitorConfig config, 
+    private Long queryTableIncrementWithConfig(MonitorConfig config,
                                               LocalDateTime startTime, LocalDateTime endTime) {
         try {
+            // 使用配置中指定的数据源查询增量数据
             Long count = tableOperationRepository.queryTableIncrement(
-                config.getTableName(), config.getTimeColumnName(), startTime, endTime);
-            log.debug("表 {} 使用时间字段 {} 查询到增量数据: {}", 
-                    config.getTableName(), config.getTimeColumnName(), count);
+                config.getDataSourceName(), config.getTableName(), config.getTimeColumnName(), startTime, endTime);
+            log.debug("数据源 {} 中的表 {} 使用时间字段 {} 查询到增量数据: {}",
+                    config.getDataSourceName(), config.getTableName(), config.getTimeColumnName(), count);
             return count != null ? count : 0L;
-            
+
         } catch (Exception e) {
-            log.error("查询表 {} 增量数据时发生错误: {}", config.getTableName(), e.getMessage(), e);
+            log.error("查询数据源 {} 中的表 {} 增量数据时发生错误: {}",
+                    config.getDataSourceName(), config.getTableName(), e.getMessage(), e);
             return 0L;
         }
     }
     
-    /**
-     * 查询表的增量数据（保留原有方法以兼容）
-     */
-    private Long queryTableIncrement(String tableName, 
-                                   LocalDateTime startTime, LocalDateTime endTime) {
-        try {
-            // 尝试使用创建时间字段查询
-            String[] timeColumns = {"created_time", "create_time", "gmt_create", "created_at"};
-            
-            for (String timeColumn : timeColumns) {
-                try {
-                    Long count = tableOperationRepository.queryTableIncrement(tableName, timeColumn, startTime, endTime);
-                    log.debug("表 {} 使用时间字段 {} 查询到增量数据: {}", tableName, timeColumn, count);
-                    return count != null ? count : 0L;
-                    
-                } catch (Exception e) {
-                    log.debug("表 {} 使用时间字段 {} 查询失败: {}", tableName, timeColumn, e.getMessage());
-                }
-            }
-            
-            // 如果没有时间字段，返回0
-            log.warn("表 {} 没有找到合适的时间字段进行增量查询", tableName);
-            return 0L;
-            
-        } catch (Exception e) {
-            log.error("查询表 {} 增量数据时发生错误: {}", tableName, e.getMessage(), e);
-            return 0L;
-        }
-    }
-    
-    /**
-     * 获取需要监控的表名列表
-     */
-    private List<String> getMonitoredTableNames() {
-        return tablePatternService.getMatchedTableNames(
-            dbMonitorProperties.getTableNames()
-        );
-    }
+
     
     /**
      * 计算开始时间（基于监控配置）
@@ -257,24 +179,7 @@ public class DbMonitorService {
         }
     }
     
-    /**
-     * 计算开始时间（基于配置文件，保留兼容性）
-     */
-    private LocalDateTime calculateStartTime(LocalDateTime endTime) {
-        String type = dbMonitorProperties.getTimeInterval().getType();
-        int value = dbMonitorProperties.getTimeInterval().getValue();
-        
-        switch (type.toUpperCase()) {
-            case "MINUTES":
-                return endTime.minusMinutes(value);
-            case "HOURS":
-                return endTime.minusHours(value);
-            case "DAYS":
-                return endTime.minusDays(value);
-            default:
-                return endTime.minusMinutes(value);
-        }
-    }
+
     
 
     

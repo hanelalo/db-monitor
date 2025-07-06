@@ -13,10 +13,11 @@
       "defaultValue": "primary"
     },
     {
-      "name": "db.monitor.table-names",
-      "type": "java.util.List<java.lang.String>",
-      "description": "需要监控的表名列表，支持通配符"
+      "name": "db.monitor.config-data-source-name",
+      "type": "java.lang.String",
+      "description": "监控配置和结果数据存储的数据源名称，如果不指定则使用 dataSourceName"
     },
+
     {
       "name": "db.monitor.time-interval.type",
       "type": "java.lang.String",
@@ -120,6 +121,23 @@
       "type": "java.lang.String",
       "description": "暴露端点路径",
       "defaultValue": "/metrics"
+    },
+    {
+      "name": "db.monitor.config-table.table-name",
+      "type": "java.lang.String",
+      "description": "监控配置表名",
+      "defaultValue": "db_monitor_config"
+    },
+    {
+      "name": "db.monitor.config-table.auto-create",
+      "type": "java.lang.Boolean",
+      "description": "是否自动创建监控配置表",
+      "defaultValue": true
+    },
+    {
+      "name": "db.monitor.config-table.data-source-name",
+      "type": "java.lang.String",
+      "description": "监控配置表所属的数据源名称，如果不指定则使用 configDataSourceName 或 dataSourceName"
     }
   ]
 }

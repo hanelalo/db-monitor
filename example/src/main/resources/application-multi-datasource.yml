@@ -1,0 +1,74 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: db-monitor-multi-datasource-example
+  
+  # 多数据源配置示例
+  datasource:
+    # 主数据源（业务数据）
+    primary:
+      url: jdbc:h2:mem:primary;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+      driver-class-name: org.h2.Driver
+      username: sa
+      password:
+    
+    # 监控配置和统计数据存储数据源
+    monitor:
+      url: jdbc:h2:mem:monitor;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+      driver-class-name: org.h2.Driver
+      username: sa
+      password:
+    
+    # 其他业务数据源
+    business:
+      url: jdbc:h2:mem:business;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+      driver-class-name: org.h2.Driver
+      username: sa
+      password:
+
+# 数据库监控配置
+db:
+  monitor:
+    # 启用监控
+    enabled: true
+    
+    # 默认数据源名称（用于监控的表所在的数据源）
+    data-source-name: primary
+    
+    # 监控配置和统计数据存储的专用数据源
+    config-data-source-name: monitor
+    
+    # 监控配置表配置
+    config-table:
+      # 自定义监控配置表名
+      table-name: custom_monitor_config
+      # 启用自动创建表
+      auto-create: true
+      # 可以指定配置表专用的数据源（可选，不指定则使用 config-data-source-name）
+      # data-source-name: monitor
+    
+    # 监控统计数据表配置
+    monitor-table:
+      # 自定义监控统计表名
+      table-name: custom_monitor_statistics
+      # 启用自动创建表
+      auto-create: true
+      # 数据保留天数
+      retention-days: 30
+    
+    # 监控时间间隔配置
+    time-interval:
+      type: MINUTES
+      value: 5
+    
+    # 指标暴露配置
+    metrics:
+      enabled: true
+      prefix: custom_db_monitor
+      endpoint: /custom-metrics
+
+logging:
+  level:
+    com.github.starter.dbmonitor: DEBUG

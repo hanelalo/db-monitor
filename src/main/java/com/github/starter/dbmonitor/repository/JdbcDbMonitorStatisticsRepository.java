@@ -1,5 +1,6 @@
 package com.github.starter.dbmonitor.repository;
 
+import com.github.starter.dbmonitor.config.DbMonitorProperties;
 import com.github.starter.dbmonitor.entity.DbMonitorStatistics;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,16 +21,43 @@ import java.util.Optional;
 
 /**
  * 基于JdbcTemplate的轻量级数据库监控统计数据访问层
- * 避免引入MyBatis等重量级ORM框架
+ * 支持指定统计数据存储数据源，避免引入MyBatis等重量级ORM框架
  */
 @Repository
 @Slf4j
-public class JdbcDbMonitorStatisticsRepository {
-    
+public class JdbcDbMonitorStatisticsRepository extends MultiDataSourceRepository {
+
     @Autowired
-    private JdbcTemplate jdbcTemplate;
-    
-    private static final String TABLE_NAME = "db_monitor_statistics";
+    private DbMonitorProperties dbMonitorProperties;
+
+    /**
+     * 获取监控统计表名
+     */
+    private String getTableName() {
+        return dbMonitorProperties.getMonitorTable().getTableName();
+    }
+
+    /**
+     * 获取配置存储数据源名称
+     */
+    private String getConfigDataSourceName() {
+        // 优先使用专门的配置数据源
+        if (dbMonitorProperties.getConfigDataSourceName() != null &&
+            !dbMonitorProperties.getConfigDataSourceName().trim().isEmpty()) {
+            return dbMonitorProperties.getConfigDataSourceName();
+        }
+
+        // 否则使用默认数据源
+        return dbMonitorProperties.getDataSourceName();
+    }
+
+    /**
+     * 获取用于统计数据操作的JdbcTemplate
+     */
+    private JdbcTemplate getConfigJdbcTemplate() {
+        String dataSourceName = getConfigDataSourceName();
+        return getJdbcTemplate(dataSourceName);
+    }
     
     // RowMapper for DbMonitorStatistics
     private final RowMapper<DbMonitorStatistics> rowMapper = new RowMapper<DbMonitorStatistics>() {
@@ -61,7 +89,13 @@ public class JdbcDbMonitorStatisticsRepository {
      * 创建统计数据表
      */
     public void createTableIfNotExists() {
-        String sql = "CREATE TABLE IF NOT EXISTS " + TABLE_NAME + " (" +
+        if (!dbMonitorProperties.getMonitorTable().isAutoCreate()) {
+            log.info("监控统计表自动创建已禁用，跳过表创建");
+            return;
+        }
+
+        String tableName = getTableName();
+        String sql = "CREATE TABLE IF NOT EXISTS " + tableName + " (" +
                 "id BIGINT AUTO_INCREMENT PRIMARY KEY, " +
                 "data_source_name VARCHAR(100) NOT NULL, " +
                 "table_name VARCHAR(100) NOT NULL, " +
@@ -79,13 +113,13 @@ public class JdbcDbMonitorStatisticsRepository {
                 "INDEX idx_statistic_time (statistic_time), " +
                 "INDEX idx_created_time (created_time)" +
                 ")";
-        
+
         try {
-            jdbcTemplate.execute(sql);
-            log.info("监控统计数据表创建或已存在");
+            getConfigJdbcTemplate().execute(sql);
+            log.info("监控统计表 {} 创建或已存在，数据源: {}", tableName, getConfigDataSourceName());
         } catch (Exception e) {
-            log.error("创建监控统计数据表失败: {}", e.getMessage(), e);
-            throw new RuntimeException("创建监控统计数据表失败", e);
+            log.error("创建监控统计表 {} 失败: {}", tableName, e.getMessage(), e);
+            throw new RuntimeException("创建监控统计表失败", e);
         }
     }
     
@@ -93,15 +127,16 @@ public class JdbcDbMonitorStatisticsRepository {
      * 插入统计记录
      */
     public DbMonitorStatistics insert(DbMonitorStatistics statistics) {
-        String sql = "INSERT INTO " + TABLE_NAME + 
+        String tableName = getTableName();
+        String sql = "INSERT INTO " + tableName +
                 " (data_source_name, table_name, statistic_time, start_time, end_time, " +
                 "increment_count, estimated_disk_size_bytes, avg_row_size_bytes, " +
                 "interval_type, interval_value, created_time, additional_info) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
+
         KeyHolder keyHolder = new GeneratedKeyHolder();
         
-        jdbcTemplate.update(connection -> {
+        getConfigJdbcTemplate().update(connection -> {
             PreparedStatement ps = connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
             ps.setString(1, statistics.getDataSourceName());
             ps.setString(2, statistics.getTableName());
@@ -133,13 +168,14 @@ public class JdbcDbMonitorStatisticsRepository {
             return 0;
         }
         
-        String sql = "INSERT INTO " + TABLE_NAME + 
+        String tableName = getTableName();
+        String sql = "INSERT INTO " + tableName +
                 " (data_source_name, table_name, statistic_time, start_time, end_time, " +
                 "increment_count, estimated_disk_size_bytes, avg_row_size_bytes, " +
                 "interval_type, interval_value, created_time, additional_info) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        
-        return jdbcTemplate.batchUpdate(sql, statisticsList, statisticsList.size(),
+
+        return getConfigJdbcTemplate().batchUpdate(sql, statisticsList, statisticsList.size(),
                 (ps, statistics) -> {
                     ps.setString(1, statistics.getDataSourceName());
                     ps.setString(2, statistics.getTableName());
@@ -160,85 +196,93 @@ public class JdbcDbMonitorStatisticsRepository {
      * 根据ID查询统计记录
      */
     public Optional<DbMonitorStatistics> findById(Long id) {
-        String sql = "SELECT * FROM " + TABLE_NAME + " WHERE id = ?";
+        String tableName = getTableName();
+        String sql = "SELECT * FROM " + tableName + " WHERE id = ?";
         try {
-            DbMonitorStatistics statistics = jdbcTemplate.queryForObject(sql, rowMapper, id);
+            DbMonitorStatistics statistics = getConfigJdbcTemplate().queryForObject(sql, rowMapper, id);
             return Optional.ofNullable(statistics);
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
     }
-    
+
     /**
      * 查询指定时间范围内的统计记录
      */
     public List<DbMonitorStatistics> findByTimeRange(LocalDateTime startTime, LocalDateTime endTime) {
-        String sql = "SELECT * FROM " + TABLE_NAME + 
+        String tableName = getTableName();
+        String sql = "SELECT * FROM " + tableName +
                 " WHERE statistic_time >= ? AND statistic_time <= ? ORDER BY statistic_time DESC";
-        return jdbcTemplate.query(sql, rowMapper, startTime, endTime);
+        return getConfigJdbcTemplate().query(sql, rowMapper, startTime, endTime);
     }
-    
+
     /**
      * 查询指定数据源和表的统计记录
      */
     public List<DbMonitorStatistics> findByDataSourceAndTable(String dataSourceName, String tableName) {
-        String sql = "SELECT * FROM " + TABLE_NAME + 
+        String configTableName = getTableName();
+        String sql = "SELECT * FROM " + configTableName +
                 " WHERE data_source_name = ? AND table_name = ? ORDER BY statistic_time DESC";
-        return jdbcTemplate.query(sql, rowMapper, dataSourceName, tableName);
+        return getConfigJdbcTemplate().query(sql, rowMapper, dataSourceName, tableName);
     }
-    
+
     /**
      * 查询指定数据源和表在指定时间范围内的统计记录
      */
     public List<DbMonitorStatistics> findByDataSourceAndTableAndTimeRange(
             String dataSourceName, String tableName, LocalDateTime startTime, LocalDateTime endTime) {
-        String sql = "SELECT * FROM " + TABLE_NAME + 
+        String configTableName = getTableName();
+        String sql = "SELECT * FROM " + configTableName +
                 " WHERE data_source_name = ? AND table_name = ? " +
                 "AND statistic_time >= ? AND statistic_time <= ? ORDER BY statistic_time DESC";
-        return jdbcTemplate.query(sql, rowMapper, dataSourceName, tableName, startTime, endTime);
+        return getConfigJdbcTemplate().query(sql, rowMapper, dataSourceName, tableName, startTime, endTime);
     }
-    
+
     /**
      * 获取最新的统计记录
      */
     public Optional<DbMonitorStatistics> findLatestByDataSourceAndTable(String dataSourceName, String tableName) {
-        String sql = "SELECT * FROM " + TABLE_NAME + 
+        String configTableName = getTableName();
+        String sql = "SELECT * FROM " + configTableName +
                 " WHERE data_source_name = ? AND table_name = ? ORDER BY statistic_time DESC LIMIT 1";
         try {
-            DbMonitorStatistics statistics = jdbcTemplate.queryForObject(sql, rowMapper, dataSourceName, tableName);
+            DbMonitorStatistics statistics = getConfigJdbcTemplate().queryForObject(sql, rowMapper, dataSourceName, tableName);
             return Optional.ofNullable(statistics);
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
     }
-    
+
     /**
      * 删除指定时间之前的记录
      */
     public int deleteByCreatedTimeBefore(LocalDateTime cutoffTime) {
-        String sql = "DELETE FROM " + TABLE_NAME + " WHERE created_time < ?";
-        return jdbcTemplate.update(sql, cutoffTime);
+        String tableName = getTableName();
+        String sql = "DELETE FROM " + tableName + " WHERE created_time < ?";
+        return getConfigJdbcTemplate().update(sql, cutoffTime);
     }
-    
+
     /**
      * 根据ID删除统计记录
      */
     public boolean deleteById(Long id) {
-        String sql = "DELETE FROM " + TABLE_NAME + " WHERE id = ?";
-        int rows = jdbcTemplate.update(sql, id);
+        String tableName = getTableName();
+        String sql = "DELETE FROM " + tableName + " WHERE id = ?";
+        int rows = getConfigJdbcTemplate().update(sql, id);
         return rows > 0;
     }
-    
+
     /**
      * 更新统计记录
      */
     public boolean update(DbMonitorStatistics statistics) {
-        String sql = "UPDATE " + TABLE_NAME + " SET " +
+        String tableName = getTableName();
+        String sql = "UPDATE " + tableName + " SET " +
                 "data_source_name = ?, table_name = ?, statistic_time = ?, start_time = ?, end_time = ?, " +
                 "increment_count = ?, estimated_disk_size_bytes = ?, avg_row_size_bytes = ?, " +
                 "interval_type = ?, interval_value = ?, additional_info = ? WHERE id = ?";
-        
-        int rows = jdbcTemplate.update(sql,
+
+        int rows = getConfigJdbcTemplate().update(sql,
                 statistics.getDataSourceName(),
                 statistics.getTableName(),
                 statistics.getStatisticTime(),
@@ -251,7 +295,7 @@ public class JdbcDbMonitorStatisticsRepository {
                 statistics.getIntervalValue(),
                 statistics.getAdditionalInfo(),
                 statistics.getId());
-        
+
         return rows > 0;
     }
     
@@ -259,24 +303,27 @@ public class JdbcDbMonitorStatisticsRepository {
      * 统计总记录数
      */
     public long count() {
-        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME;
-        return jdbcTemplate.queryForObject(sql, Long.class);
+        String tableName = getTableName();
+        String sql = "SELECT COUNT(*) FROM " + tableName;
+        return getConfigJdbcTemplate().queryForObject(sql, Long.class);
     }
-    
+
     /**
      * 统计指定数据源和表的记录数
      */
     public long countByDataSourceAndTable(String dataSourceName, String tableName) {
-        String sql = "SELECT COUNT(*) FROM " + TABLE_NAME + " WHERE data_source_name = ? AND table_name = ?";
-        return jdbcTemplate.queryForObject(sql, Long.class, dataSourceName, tableName);
+        String configTableName = getTableName();
+        String sql = "SELECT COUNT(*) FROM " + configTableName + " WHERE data_source_name = ? AND table_name = ?";
+        return getConfigJdbcTemplate().queryForObject(sql, Long.class, dataSourceName, tableName);
     }
 
     /**
      * 根据数据源查询统计记录，按统计时间倒序
      */
     public List<DbMonitorStatistics> findByDataSourceNameOrderByStatisticTimeDesc(String dataSourceName) {
-        String sql = "SELECT * FROM " + TABLE_NAME +
+        String tableName = getTableName();
+        String sql = "SELECT * FROM " + tableName +
                 " WHERE data_source_name = ? ORDER BY statistic_time DESC";
-        return jdbcTemplate.query(sql, rowMapper, dataSourceName);
+        return getConfigJdbcTemplate().query(sql, rowMapper, dataSourceName);
     }
 }

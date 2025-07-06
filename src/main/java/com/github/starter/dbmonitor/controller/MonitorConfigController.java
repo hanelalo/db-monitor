@@ -1,5 +1,7 @@
 package com.github.starter.dbmonitor.controller;
 
+import com.github.starter.dbmonitor.config.condition.ConditionalOnConfigEndpointsEnabled;
+import com.github.starter.dbmonitor.config.condition.ConditionalOnEndpointsEnabled;
 import com.github.starter.dbmonitor.entity.MonitorConfig;
 import com.github.starter.dbmonitor.service.MonitorConfigService;
 import com.github.starter.dbmonitor.service.DatabaseSecurityService;
@@ -19,6 +21,8 @@ import java.util.Optional;
  */
 @RestController
 @RequestMapping("/api/monitor-config")
+@ConditionalOnEndpointsEnabled
+@ConditionalOnConfigEndpointsEnabled
 @Slf4j
 public class MonitorConfigController {
     

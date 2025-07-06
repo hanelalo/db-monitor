@@ -1,11 +1,12 @@
 package com.github.starter.dbmonitor.config;
 
 import com.github.starter.dbmonitor.job.DbMonitorJobHandler;
+import com.github.starter.dbmonitor.repository.JdbcMonitorConfigRepository;
 import com.github.starter.dbmonitor.service.DbMonitorService;
 import com.github.starter.dbmonitor.service.DbMonitorMetricsService;
 import com.github.starter.dbmonitor.service.DataSourceService;
-import com.github.starter.dbmonitor.service.TablePatternService;
-import com.github.starter.dbmonitor.controller.DbMonitorController;
+
+
 import com.xxl.job.core.executor.XxlJobExecutor;
 import lombok.extern.slf4j.Slf4j;
 // 移除 MyBatis 相关导入
@@ -132,16 +133,16 @@ public class DbMonitorAutoConfiguration {
     public DataSourceService dataSourceService() {
         return new DataSourceService();
     }
-    
+
     /**
-     * 表名模式服务
+     * 监控配置数据访问层
      */
-    @Bean
-    @ConditionalOnMissingBean(TablePatternService.class)
-    public TablePatternService tablePatternService() {
-        return new TablePatternService();
+    @Bean("monitorConfigRepository")
+    @ConditionalOnMissingBean(JdbcMonitorConfigRepository.class)
+    public JdbcMonitorConfigRepository monitorConfigRepository() {
+        return new JdbcMonitorConfigRepository();
     }
-    
+
     /**
      * 数据库监控服务
      */
@@ -160,15 +161,7 @@ public class DbMonitorAutoConfiguration {
         return new DbMonitorMetricsService();
     }
     
-    /**
-     * 数据库监控控制器
-     */
-    @Bean
-    @ConditionalOnMissingBean(DbMonitorController.class)
-    @ConditionalOnProperty(prefix = "db.monitor.metrics", name = "enabled", havingValue = "true", matchIfMissing = true)
-    public DbMonitorController dbMonitorController() {
-        return new DbMonitorController();
-    }
+
     
     /**
      * XXL-Job 任务处理器
@@ -183,9 +176,11 @@ public class DbMonitorAutoConfiguration {
     @PostConstruct
     public void logConfiguration() {
         log.info("数据库监控功能已启用");
-        log.info("数据源: {}", dbMonitorProperties.getDataSourceName());
-        log.info("监控表: {}", dbMonitorProperties.getTableNames());
-        log.info("时间间隔: {} {}", dbMonitorProperties.getTimeInterval().getValue(), 
+        log.info("默认数据源: {}", dbMonitorProperties.getDataSourceName());
+        log.info("配置数据源: {}", dbMonitorProperties.getConfigDataSourceName());
+        log.info("配置表名: {}", dbMonitorProperties.getConfigTable().getTableName());
+        log.info("统计表名: {}", dbMonitorProperties.getMonitorTable().getTableName());
+        log.info("时间间隔: {} {}", dbMonitorProperties.getTimeInterval().getValue(),
                 dbMonitorProperties.getTimeInterval().getType());
         log.info("XXL-Job 启用状态: {}", dbMonitorProperties.getXxlJob().isEnabled());
         log.info("指标暴露启用状态: {}", dbMonitorProperties.getMetrics().isEnabled());
